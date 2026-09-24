@@ -1,7 +1,11 @@
 package com.typingpet.app
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -15,6 +19,10 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 
 class MainActivity : Activity() {
 
@@ -31,9 +39,36 @@ class MainActivity : Activity() {
     private val accent = Color.parseColor("#FF9D6C")
     private val cardBg = Color.WHITE
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 初回起動時は言語を選ぶまで設定画面を組み立てない(選択後にrecreateされる)
+        if (!Prefs.hasChosenLanguage(this)) {
+            showLanguageDialog(cancelable = false)
+            return
+        }
+
+        buildUi()
+    }
+
+    private fun showLanguageDialog(cancelable: Boolean) {
+        val labels = arrayOf("日本語", "English", "한국어")
+        val codes = arrayOf("ja", "en", "ko")
+        AlertDialog.Builder(this)
+            .setTitle("言語 / Language / 언어")
+            .setItems(labels) { _, which ->
+                Prefs.setLanguage(this, codes[which])
+                recreate()
+            }
+            .setCancelable(cancelable)
+            .show()
+    }
+
+    private fun buildUi() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(48), dp(24), dp(24))
@@ -70,6 +105,11 @@ class MainActivity : Activity() {
                         startService(Intent(this@MainActivity, OverlayService::class.java))
                     }
                 }
+            })
+            addView(spacer(8))
+            addView(Button(this@MainActivity).apply {
+                text = "言語 / Language / 언어"
+                setOnClickListener { showLanguageDialog(cancelable = true) }
             })
         })
 
@@ -200,6 +240,24 @@ class MainActivity : Activity() {
                 setOnClickListener {
                     Prefs.resetPos(this@MainActivity)
                     OverlayService.refreshIfRunning()
+                }
+            })
+        })
+
+        basicBox.addView(spacer(16))
+
+        basicBox.addView(sectionCard {
+            addView(smallLabel(getString(R.string.label_icon_section)))
+            addView(descLabel(getString(R.string.desc_icon_section)))
+            addView(spacer(12))
+            addView(Button(this@MainActivity).apply {
+                text = getString(R.string.btn_add_icon_shortcut)
+                setOnClickListener {
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "image/*"
+                    }
+                    startActivityForResult(intent, 320)
                 }
             })
         })
@@ -392,10 +450,47 @@ class MainActivity : Activity() {
         return row
     }
 
+    // ---------- ホーム画面アイコン(ショートカット) ----------
+
+    private fun createIconShortcut(uri: Uri) {
+        val original = try {
+            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+        } catch (e: Exception) { null }
+
+        if (original == null) return
+
+        val squared = cropToSquare(original)
+        val icon = IconCompat.createWithBitmap(squared)
+
+        val shortcut = ShortcutInfoCompat.Builder(this, "typing_pet_icon_${System.currentTimeMillis()}")
+            .setShortLabel(getString(R.string.app_name))
+            .setIcon(icon)
+            .setIntent(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN))
+            .build()
+
+        if (ShortcutManagerCompat.isRequestPinShortcutSupported(this)) {
+            ShortcutManagerCompat.requestPinShortcut(this, shortcut, null)
+        } else {
+            Toast.makeText(this, getString(R.string.toast_icon_not_supported), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun cropToSquare(src: Bitmap): Bitmap {
+        val size = minOf(src.width, src.height)
+        val x = (src.width - size) / 2
+        val y = (src.height - size) / 2
+        return Bitmap.createBitmap(src, x, y, size, size)
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
+
+        if (requestCode == 320) {
+            createIconShortcut(uri)
+            return
+        }
 
         try {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)

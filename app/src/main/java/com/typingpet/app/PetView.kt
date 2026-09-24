@@ -16,13 +16,14 @@ import android.view.View
  * customFrames が空なら内蔵の描画イラスト(4色プリセット x 4表情)、
  * 空でなければユーザーが追加した画像を順番に切り替えて表示する。
  * 「！」「？」が入力された時は、専用イラスト(exclaimFrame/questionFrame)が
- * 設定されていればそれを優先表示し、SPECIAL_REVERT_DELAY_MS だけ入力が
- * 止まると自動的に通常表示へ戻る。
+ * 設定されていればそれを優先表示する。
+ * どの状態でも、IDLE_REVERT_DELAY_MS だけ入力が止まると自動的に
+ * 1枚目(frame=0)の表示に戻る。
  */
 class PetView(context: Context) : View(context) {
 
     companion object {
-        private const val SPECIAL_REVERT_DELAY_MS = 1500L
+        private const val IDLE_REVERT_DELAY_MS = 700L
     }
 
     var preset = 0
@@ -48,6 +49,8 @@ class PetView(context: Context) : View(context) {
     private val revertHandler = Handler(Looper.getMainLooper())
     private val revertRunnable = Runnable {
         activeSpecial = null
+        frame = 0
+        count = 0
         invalidate()
     }
 
@@ -71,8 +74,8 @@ class PetView(context: Context) : View(context) {
 
     /**
      * 打鍵イベントごとに呼ぶ。
-     * special に '!' か '?' を渡すと、対応する専用イラストがあればそれを表示し、
-     * 一定時間後に自動で通常表示へ戻る。
+     * special に '!' か '?' を渡すと、対応する専用イラストがあればそれを表示する。
+     * どのケースでも、一定時間入力が止まると自動的に1枚目の表示へ戻る。
      */
     fun react(special: Char? = null) {
         revertHandler.removeCallbacks(revertRunnable)
@@ -88,9 +91,7 @@ class PetView(context: Context) : View(context) {
         frame = count % frameCount
         invalidate()
 
-        if (activeSpecial != null) {
-            revertHandler.postDelayed(revertRunnable, SPECIAL_REVERT_DELAY_MS)
-        }
+        revertHandler.postDelayed(revertRunnable, IDLE_REVERT_DELAY_MS)
 
         if (shakeLevel <= 0) return
         val dip = when (shakeLevel) { 1 -> 0.96f; 2 -> 0.92f; else -> 0.86f }

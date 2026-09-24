@@ -7,6 +7,8 @@ object Prefs {
     private const val NAME = "typing_pet_prefs"
     private fun sp(context: Context) = context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 
+    const val LANG_SYSTEM = "system"
+
     // サイズ: small / medium / large / xlarge
     fun getSizeKey(context: Context): String = sp(context).getString("size", "medium") ?: "medium"
     fun setSizeKey(context: Context, key: String) = sp(context).edit().putString("size", key).apply()
@@ -64,4 +66,9 @@ object Prefs {
 
     fun getQuestionUri(context: Context): String? = sp(context).getString("questionUri", null)
     fun setQuestionUri(context: Context, uri: String?) = sp(context).edit().putString("questionUri", uri).apply()
+
+    // 表示言語: "system" / "ja" / "en" / "ko"。未選択の間は初回ポップアップを出す
+    fun hasChosenLanguage(context: Context): Boolean = sp(context).contains("language")
+    fun getLanguage(context: Context): String = sp(context).getString("language", LANG_SYSTEM) ?: LANG_SYSTEM
+    fun setLanguage(context: Context, code: String) = sp(context).edit().putString("language", code).apply()
 }
