@@ -1,4 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">タイピングペット</string>
+
+    <string name="title_settings">🐾 タイピングペット 設定</string>
+
+    <string name="section_permission">権限とペットの表示</string>
+    <string name="btn_overlay">① 他のアプリの上に表示を許可</string>
+    <string name="btn_accessibility">② アクセシビリティ設定を開く</string>
+    <string name="btn_show_pet">③ ペットを表示する</string>
+
+    <string name="tab_basic">基本設定</string>
+    <string name="tab_preset">プリセット</string>
+    <string name="tab_image">イラスト</string>
+
+    <string name="label_size">サイズ</string>
+    <string name="size_small">小</string>
+    <string name="size_medium">中</string>
+    <string name="size_large">大</string>
+    <string name="size_xlarge">特大</string>
+
+    <string name="label_shake">揺れの強さ</string>
+    <string name="desc_shake">タイピング時にペットが揺れる度合いです。「なし」は動かず画像だけ切り替わります。</string>
+    <string name="shake_none">なし</string>
+    <string name="shake_1">1段階</string>
+    <string name="shake_2">2段階</string>
+    <string name="shake_3">3段階</string>
+
+    <string name="label_display">表示</string>
+    <string name="switch_always_on_top_title">常に最前面に固定</string>
+    <string name="switch_always_on_top_desc">ONだと他のアプリを開いたときも自動でペットが現れます。OFFだと③ボタンを押した時だけ表示されます。</string>
+    <string name="switch_lock_title">位置ロック(タップを素通し)</string>
+    <string name="switch_lock_desc">ONにするとタップが下のアプリに通り抜け、ドラッグで動かせなくなります。</string>
+    <string name="btn_reset_pos">位置を初期化</string>
+
+    <string name="label_builtin_color">内蔵カラー</string>
+    <string name="desc_builtin_color">イラストタブで画像を追加していない間は、ここで選んだ色が使われます。</string>
+    <string name="label_selected">選択中</string>
+    <string name="label_select">選ぶ</string>
+
+    <string name="label_add_illust">自分のイラストを追加(最大4枚)</string>
+    <string name="desc_add_illust">1枚だけ追加した場合はその画像が常に表示され、複数追加すると打鍵ごとに順番に切り替わります。全部削除すると内蔵カラーに戻ります。</string>
+    <string name="frame_label">枠 %1$d</string>
+    <string name="btn_add">追加</string>
+    <string name="btn_remove">削除</string>
+
+    <string name="label_special">「！」「？」専用イラスト(任意)</string>
+    <string name="desc_special">設定すると、！または？を入力した瞬間だけこの画像に切り替わります(内容は保存・送信せず、記号が含まれるかをその場で見るだけです)。入力が止まるとしばらくして自動的に通常表示へ戻ります。未設定ならいつも通りの反応のままです。</string>
+    <string name="label_exclaim">！用</string>
+    <string name="label_question">？用</string>
 </resources>
