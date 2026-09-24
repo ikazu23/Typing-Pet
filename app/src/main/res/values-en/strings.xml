@@ -48,4 +48,9 @@
     <string name="desc_special">If set, the pet switches to this image the instant you type ! or ? (nothing is saved or sent \u2014 it only checks in the moment whether the symbol was typed). It reverts to the normal look automatically shortly after you stop typing. Leave unset to keep the usual behavior.</string>
     <string name="label_exclaim">For \"!\"</string>
     <string name="label_question">For \"?\"</string>
+
+    <string name="label_icon_section">Home screen icon (optional)</string>
+    <string name="desc_icon_section">Android doesn\'t allow apps to change their own icon after install. Instead, you can add a shortcut with an image you pick to the home screen. Use that shortcut to open the app.</string>
+    <string name="btn_add_icon_shortcut">Pick an image and add to home screen</string>
+    <string name="toast_icon_not_supported">This device doesn\'t support adding icons to the home screen</string>
 </resources>
