@@ -58,5 +58,5 @@
     <string name="label_exclaim_pool">\"!\" 이미지(선택)</string>
     <string name="desc_exclaim_pool">!를 입력하는 순간 등록한 것 중 랜덤으로 1장 표시됩니다(내용은 저장·전송하지 않고 그 순간에 기호가 포함되어 있는지만 확인합니다).</string>
     <string name="label_question_pool">\"?\" 이미지(선택)</string>
-    <string name="desc_question_pool">?를 입력하는 순간 등록한 것 중 랜덤으로 1장 표시됩니다.</string>
+    <string name="desc_question_pool">\?를 입력하는 순간 등록한 것 중 랜덤으로 1장 표시됩니다.</string>
 </resources>
