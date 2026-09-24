@@ -13,6 +13,8 @@ import android.view.View
  * 打鍵のたびに表情(または画像)を切り替える丸っこいペット。
  * customFrames が空なら内蔵の描画イラスト(4色プリセット x 4表情)、
  * 空でなければユーザーが追加した画像を順番に切り替えて表示する。
+ * 「！」「？」が入力された時は、専用イラスト(exclaimFrame/questionFrame)が
+ * 設定されていればそれを優先表示する。
  */
 class PetView(context: Context) : View(context) {
 
@@ -22,10 +24,17 @@ class PetView(context: Context) : View(context) {
     var customFrames: List<Bitmap> = emptyList()
         set(value) { field = value; invalidate() }
 
+    var exclaimFrame: Bitmap? = null
+        set(value) { field = value; invalidate() }
+
+    var questionFrame: Bitmap? = null
+        set(value) { field = value; invalidate() }
+
     /** 揺れの強さ 0(なし・画像だけ切り替え)〜3(大きく弾む) */
     var shakeLevel = 3
 
     private var frame = 0
+    private var activeSpecial: Bitmap? = null
     private var scaleY = 1f
     private var count = 0
 
@@ -47,8 +56,17 @@ class PetView(context: Context) : View(context) {
     private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#59FFFFFF") }
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-    /** 打鍵イベントごとに呼ぶ */
-    fun react() {
+    /**
+     * 打鍵イベントごとに呼ぶ。
+     * special に '!' か '?' を渡すと、対応する専用イラストがあればそれを表示する。
+     */
+    fun react(special: Char? = null) {
+        activeSpecial = when (special) {
+            '!' -> exclaimFrame
+            '?' -> questionFrame
+            else -> null
+        }
+
         count++
         val frameCount = if (customFrames.isNotEmpty()) customFrames.size else 4
         frame = count % frameCount
@@ -70,13 +88,17 @@ class PetView(context: Context) : View(context) {
         canvas.save()
         canvas.scale(1f, scaleY, cx, cy + height * 0.16f)
 
-        if (customFrames.isNotEmpty()) drawCustom(canvas, cx, cy) else drawBuiltIn(canvas, cx, cy)
+        val special = activeSpecial
+        when {
+            special != null -> drawBitmapFrame(canvas, cx, cy, special)
+            customFrames.isNotEmpty() -> drawBitmapFrame(canvas, cx, cy, customFrames[frame % customFrames.size])
+            else -> drawBuiltIn(canvas, cx, cy)
+        }
 
         canvas.restore()
     }
 
-    private fun drawCustom(canvas: Canvas, cx: Float, cy: Float) {
-        val bmp = customFrames[frame % customFrames.size]
+    private fun drawBitmapFrame(canvas: Canvas, cx: Float, cy: Float, bmp: Bitmap) {
         val size = minOf(width, height).toFloat()
         val scale = size / maxOf(bmp.width, bmp.height)
         val w = bmp.width * scale

@@ -57,4 +57,11 @@ object Prefs {
 
     fun getCustomFrames(context: Context): List<String> =
         getCustomFrameSlots(context).filterNotNull()
+
+    // 「！」「？」入力時専用のイラスト(任意設定)
+    fun getExclaimUri(context: Context): String? = sp(context).getString("exclaimUri", null)
+    fun setExclaimUri(context: Context, uri: String?) = sp(context).edit().putString("exclaimUri", uri).apply()
+
+    fun getQuestionUri(context: Context): String? = sp(context).getString("questionUri", null)
+    fun setQuestionUri(context: Context, uri: String?) = sp(context).edit().putString("questionUri", uri).apply()
 }

@@ -235,6 +235,8 @@ class MainActivity : Activity() {
     // ---------- イラストタブ ----------
 
     private val imagePreviews = arrayOfNulls<ImageView>(4)
+    private var exclaimThumb: ImageView? = null
+    private var questionThumb: ImageView? = null
 
     private fun renderImages() {
         imageBox.removeAllViews()
@@ -248,6 +250,40 @@ class MainActivity : Activity() {
                 addView(imageSlotRow(i))
                 addView(spacer(10))
             }
+        })
+
+        imageBox.addView(spacer(16))
+
+        imageBox.addView(sectionCard {
+            addView(smallLabel("「！」「？」専用イラスト(任意)"))
+            addView(descLabel("設定すると、！または？を入力した瞬間だけこの画像に切り替わります(内容は保存・送信せず、記号が含まれるかをその場で見るだけです)。未設定ならいつも通りの反応のままです。"))
+            addView(spacer(12))
+
+            exclaimThumb = ImageView(this@MainActivity)
+            addView(specialImageRow(
+                "！用",
+                exclaimThumb!!,
+                Prefs.getExclaimUri(this@MainActivity),
+                requestCode = 310,
+                onRemove = {
+                    Prefs.setExclaimUri(this@MainActivity, null)
+                    renderImages()
+                }
+            ))
+
+            addView(spacer(10))
+
+            questionThumb = ImageView(this@MainActivity)
+            addView(specialImageRow(
+                "？用",
+                questionThumb!!,
+                Prefs.getQuestionUri(this@MainActivity),
+                requestCode = 311,
+                onRemove = {
+                    Prefs.setQuestionUri(this@MainActivity, null)
+                    renderImages()
+                }
+            ))
         })
     }
 
@@ -299,18 +335,80 @@ class MainActivity : Activity() {
         return row
     }
 
+    /** ！／？専用スロットの1行を作る(枠1〜4とは別で、単一画像のみ) */
+    private fun specialImageRow(
+        label: String,
+        thumb: ImageView,
+        currentUri: String?,
+        requestCode: Int,
+        onRemove: () -> Unit
+    ): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        thumb.layoutParams = LinearLayout.LayoutParams(dp(56), dp(56)).apply { marginEnd = dp(12) }
+        thumb.scaleType = ImageView.ScaleType.CENTER_CROP
+        thumb.setBackgroundColor(Color.parseColor("#EEE0D3"))
+        if (currentUri != null) {
+            try { thumb.setImageURI(Uri.parse(currentUri)) } catch (e: Exception) {}
+        } else {
+            thumb.setImageURI(null)
+        }
+        row.addView(thumb)
+
+        row.addView(TextView(this).apply {
+            text = label
+            setTextColor(ink)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        })
+
+        row.addView(Button(this).apply {
+            text = "追加"
+            setOnClickListener {
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "image/*"
+                }
+                startActivityForResult(intent, requestCode)
+            }
+        })
+
+        row.addView(Button(this).apply {
+            text = "削除"
+            setOnClickListener { onRemove() }
+        })
+
+        return row
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode in 300..303 && resultCode == RESULT_OK) {
-            val uri = data?.data ?: return
-            try {
-                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) { /* 一部プロバイダでは付与できない場合がある */ }
+        if (resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
 
-            val index = requestCode - 300
-            Prefs.setCustomFrameSlot(this, index, uri.toString())
-            OverlayService.refreshIfRunning()
-            renderImages()
+        try {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (e: Exception) { /* 一部プロバイダでは付与できない場合がある */ }
+
+        when {
+            requestCode in 300..303 -> {
+                val index = requestCode - 300
+                Prefs.setCustomFrameSlot(this, index, uri.toString())
+                OverlayService.refreshIfRunning()
+                renderImages()
+            }
+            requestCode == 310 -> {
+                Prefs.setExclaimUri(this, uri.toString())
+                OverlayService.refreshIfRunning()
+                renderImages()
+            }
+            requestCode == 311 -> {
+                Prefs.setQuestionUri(this, uri.toString())
+                OverlayService.refreshIfRunning()
+                renderImages()
+            }
         }
     }
 

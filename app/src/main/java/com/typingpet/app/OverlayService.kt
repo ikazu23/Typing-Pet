@@ -2,6 +2,7 @@ package com.typingpet.app
 
 import android.app.Service
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
 import android.net.Uri
@@ -25,6 +26,11 @@ class OverlayService : Service() {
             instance?.petView?.post { instance?.petView?.react() }
         }
 
+        /** 「！」または「？」が入力された時に呼ぶ */
+        fun reactSpecial(special: Char) {
+            instance?.petView?.post { instance?.petView?.react(special) }
+        }
+
         /** 設定画面での変更を、動作中のオーバーレイに即反映する */
         fun refreshIfRunning() {
             instance?.applyPrefs()
@@ -38,6 +44,7 @@ class OverlayService : Service() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         petView = PetView(this)
         loadCustomFrames()
+        loadSpecialFrames()
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -76,13 +83,19 @@ class OverlayService : Service() {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
+    private fun loadBitmapFromUri(uriStr: String): Bitmap? = try {
+        contentResolver.openInputStream(Uri.parse(uriStr))?.use { BitmapFactory.decodeStream(it) }
+    } catch (e: Exception) {
+        null
+    }
+
     private fun loadCustomFrames() {
-        val bitmaps = Prefs.getCustomFrames(this).mapNotNull { uriStr ->
-            try {
-                contentResolver.openInputStream(Uri.parse(uriStr))?.use { BitmapFactory.decodeStream(it) }
-            } catch (e: Exception) { null }
-        }
-        petView.customFrames = bitmaps
+        petView.customFrames = Prefs.getCustomFrames(this).mapNotNull { loadBitmapFromUri(it) }
+    }
+
+    private fun loadSpecialFrames() {
+        petView.exclaimFrame = Prefs.getExclaimUri(this)?.let { loadBitmapFromUri(it) }
+        petView.questionFrame = Prefs.getQuestionUri(this)?.let { loadBitmapFromUri(it) }
     }
 
     fun applyPrefs() {
@@ -98,6 +111,7 @@ class OverlayService : Service() {
         petView.preset = Prefs.getPreset(this)
         petView.shakeLevel = Prefs.getShakeLevel(this)
         loadCustomFrames()
+        loadSpecialFrames()
         petView.invalidate()
     }
 
