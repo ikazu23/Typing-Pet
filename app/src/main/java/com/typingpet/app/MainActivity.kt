@@ -51,19 +51,19 @@ class MainActivity : Activity() {
         root.addView(sectionCard {
             addView(smallLabel("権限とペットの表示"))
             addView(spacer(8))
-            addView(Button(this).apply {
+            addView(Button(this@MainActivity).apply {
                 text = "① 他のアプリの上に表示を許可"
                 setOnClickListener {
                     startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                 }
             })
             addView(spacer(8))
-            addView(Button(this).apply {
+            addView(Button(this@MainActivity).apply {
                 text = "② アクセシビリティ設定を開く"
                 setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
             })
             addView(spacer(8))
-            addView(Button(this).apply {
+            addView(Button(this@MainActivity).apply {
                 text = "③ ペットを表示する"
                 setOnClickListener {
                     if (Settings.canDrawOverlays(this@MainActivity)) {
