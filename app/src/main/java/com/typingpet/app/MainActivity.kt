@@ -14,6 +14,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -269,6 +270,9 @@ class MainActivity : Activity() {
     private fun renderPreset() {
         presetBox.removeAllViews()
 
+        presetBox.addView(charactersCard())
+        presetBox.addView(spacer(16))
+
         presetBox.addView(sectionCard {
             addView(smallLabel(getString(R.string.label_builtin_color)))
             addView(descLabel(getString(R.string.desc_builtin_color)))
@@ -305,124 +309,340 @@ class MainActivity : Activity() {
         })
     }
 
+    // ---------- キャラ(イラスト一式を保存して切り替え) ----------
+
+    /** キャラを切り替え・追加・削除したらオーバーレイに反映して全タブ描き直す */
+    private fun charactersChanged() {
+        OverlayService.refreshIfRunning()
+        renderAll()
+    }
+
+    private fun charactersCard(): LinearLayout = sectionCard {
+        addView(smallLabel(getString(R.string.label_chars)))
+        addView(descLabel(getString(R.string.desc_chars)))
+        addView(spacer(12))
+
+        Prefs.ensureCharacters(this@MainActivity, getString(R.string.char_default_name, 1))
+        val names = Prefs.getCharacterNames(this@MainActivity)
+        val active = Prefs.getActiveCharacter(this@MainActivity)
+
+        names.forEachIndexed { i, name ->
+            val isActive = i == active
+            addView(TextView(this@MainActivity).apply {
+                text = if (isActive) "$name  ${getString(R.string.label_in_use)}" else name
+                textSize = 15f
+                setTextColor(if (isActive) accent else ink)
+            })
+
+            val buttons = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
+            if (!isActive) {
+                buttons.addView(Button(this@MainActivity).apply {
+                    text = getString(R.string.btn_use)
+                    setOnClickListener {
+                        Prefs.switchCharacter(this@MainActivity, i)
+                        charactersChanged()
+                    }
+                })
+            }
+            buttons.addView(Button(this@MainActivity).apply {
+                text = getString(R.string.btn_rename)
+                setOnClickListener {
+                    showTextDialog(getString(R.string.dialog_char_name_title), name, "") { newName ->
+                        Prefs.renameCharacter(this@MainActivity, i, newName)
+                        renderPreset()
+                    }
+                }
+            })
+            buttons.addView(Button(this@MainActivity).apply {
+                text = getString(R.string.btn_remove)
+                setOnClickListener {
+                    if (names.size <= 1) {
+                        Toast.makeText(this@MainActivity, getString(R.string.toast_last_char), Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    AlertDialog.Builder(this@MainActivity)
+                        .setMessage(getString(R.string.confirm_delete_char, name))
+                        .setPositiveButton(getString(R.string.btn_remove)) { _, _ ->
+                            Prefs.deleteCharacter(this@MainActivity, i)
+                            charactersChanged()
+                        }
+                        .setNegativeButton(getString(R.string.btn_cancel), null)
+                        .show()
+                }
+            })
+            addView(buttons)
+            addView(spacer(10))
+        }
+
+        addView(Button(this@MainActivity).apply {
+            text = getString(R.string.btn_add_char)
+            setOnClickListener {
+                showTextDialog(
+                    getString(R.string.dialog_char_name_title),
+                    getString(R.string.char_default_name, names.size + 1), ""
+                ) { newName ->
+                    Prefs.addCharacter(this@MainActivity, newName, copyCurrent = false)
+                    charactersChanged()
+                }
+            }
+        })
+        addView(Button(this@MainActivity).apply {
+            text = getString(R.string.btn_dup_char)
+            setOnClickListener {
+                val base = names.getOrNull(active) ?: ""
+                showTextDialog(
+                    getString(R.string.dialog_char_name_title),
+                    getString(R.string.copy_suffix, base), ""
+                ) { newName ->
+                    Prefs.addCharacter(this@MainActivity, newName, copyCurrent = true)
+                    charactersChanged()
+                }
+            }
+        })
+    }
+
+    /** 1行テキストを入力するダイアログ(空欄ならOKしても何もしない) */
+    private fun showTextDialog(title: String, initial: String, hintText: String, onOk: (String) -> Unit) {
+        val input = EditText(this).apply {
+            setText(initial)
+            hint = hintText
+            setSingleLine(true)
+            setSelection(text.length)
+        }
+        val box = LinearLayout(this).apply {
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(box)
+            .setPositiveButton(getString(R.string.btn_ok)) { _, _ ->
+                val v = input.text.toString().trim()
+                if (v.isNotEmpty()) onOk(v)
+            }
+            .setNegativeButton(getString(R.string.btn_cancel), null)
+            .show()
+    }
+
     // ---------- イラストタブ ----------
 
     private val REQ_PICK = 400
-    private val CAT_TYPING = "typing"
+    private val CAT_STEP = "step"
+    private val CAT_TRIGGER = "trigger"
     private var pendingCategory = ""
-    private var pendingSetIndex = -1
+    private var pendingIndex = -1
     private val thumbCache = HashMap<String, Bitmap?>()
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString("pendingCategory", pendingCategory)
-        outState.putInt("pendingSetIndex", pendingSetIndex)
+        outState.putInt("pendingIndex", pendingIndex)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
         pendingCategory = savedInstanceState.getString("pendingCategory", "") ?: ""
-        pendingSetIndex = savedInstanceState.getInt("pendingSetIndex", -1)
+        pendingIndex = savedInstanceState.getInt("pendingIndex", -1)
+    }
+
+    /** 画像設定を変えたらオーバーレイに反映して描き直す */
+    private fun imagesChanged() {
+        OverlayService.refreshIfRunning()
+        renderImages()
     }
 
     private fun renderImages() {
         imageBox.removeAllViews()
-
-        imageBox.addView(poolCard(Prefs.CAT_IDLE, R.string.label_idle, R.string.desc_idle))
+        imageBox.addView(idleCard())
         imageBox.addView(spacer(16))
-        imageBox.addView(typingCard())
+        imageBox.addView(stepsCard())
         imageBox.addView(spacer(16))
-        imageBox.addView(poolCard(Prefs.CAT_EXCLAIM, R.string.label_exclaim_pool, R.string.desc_exclaim_pool))
-        imageBox.addView(spacer(16))
-        imageBox.addView(poolCard(Prefs.CAT_QUESTION, R.string.label_question_pool, R.string.desc_question_pool))
+        imageBox.addView(triggersCard())
     }
 
-    /** 待機 / ！ / ？ 用のカード(枚数無制限、表示はランダム) */
-    private fun poolCard(category: String, titleRes: Int, descRes: Int): LinearLayout = sectionCard {
-        addView(smallLabel(getString(titleRes)))
-        addView(descLabel(getString(descRes)))
+    /** 待機イラスト(ランダム表示) */
+    private fun idleCard(): LinearLayout = sectionCard {
+        addView(smallLabel(getString(R.string.label_idle)))
+        addView(descLabel(getString(R.string.desc_idle)))
         addView(spacer(10))
 
-        addView(thumbStrip(Prefs.getImages(this@MainActivity, category), numbered = false) { i ->
-            val list = Prefs.getImages(this@MainActivity, category)
+        addView(thumbStrip(Prefs.getImages(this@MainActivity, Prefs.CAT_IDLE)) { i ->
+            val list = Prefs.getImages(this@MainActivity, Prefs.CAT_IDLE)
             if (i in list.indices) list.removeAt(i)
-            Prefs.setImages(this@MainActivity, category, list)
-            OverlayService.refreshIfRunning()
-            renderImages()
+            Prefs.setImages(this@MainActivity, Prefs.CAT_IDLE, list)
+            imagesChanged()
         })
 
         addView(spacer(8))
         addView(Button(this@MainActivity).apply {
             text = getString(R.string.btn_add_image)
-            setOnClickListener { pickImages(category, -1) }
+            setOnClickListener { pickImages(Prefs.CAT_IDLE, -1) }
         })
     }
 
-    /** タイピング中セットのカード(セット数・各セットの枚数とも無制限) */
-    private fun typingCard(): LinearLayout = sectionCard {
-        addView(smallLabel(getString(R.string.label_typing)))
-        addView(descLabel(getString(R.string.desc_typing)))
+    /** タイピング中イラスト(番号順。各番号に別パターンを登録でき、その番号ではランダム表示) */
+    private fun stepsCard(): LinearLayout = sectionCard {
+        addView(smallLabel(getString(R.string.label_steps)))
+        addView(descLabel(getString(R.string.desc_steps)))
         addView(spacer(12))
 
-        val sets = Prefs.getTypingSets(this@MainActivity)
-        if (sets.isEmpty()) {
+        val steps = Prefs.getTypingSteps(this@MainActivity)
+        if (steps.isEmpty()) {
             addView(descLabel(getString(R.string.empty_hint)))
             addView(spacer(8))
         }
 
-        sets.forEachIndexed { si, set ->
+        steps.forEachIndexed { si, variants ->
             val header = LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
             header.addView(TextView(this@MainActivity).apply {
-                text = getString(R.string.set_label, si + 1)
+                text = getString(R.string.step_label, si + 1)
                 textSize = 14f
                 setTextColor(ink)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             })
             header.addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_delete_set)
+                text = getString(R.string.btn_delete_step)
                 setOnClickListener {
-                    val s = Prefs.getTypingSets(this@MainActivity)
+                    val s = Prefs.getTypingSteps(this@MainActivity)
                     if (si in s.indices) s.removeAt(si)
-                    Prefs.setTypingSets(this@MainActivity, s)
-                    OverlayService.refreshIfRunning()
-                    renderImages()
+                    Prefs.setTypingSteps(this@MainActivity, s)
+                    imagesChanged()
                 }
             })
             addView(header)
             addView(spacer(6))
 
-            addView(thumbStrip(set, numbered = true) { i ->
-                val s = Prefs.getTypingSets(this@MainActivity)
+            addView(thumbStrip(variants) { i ->
+                val s = Prefs.getTypingSteps(this@MainActivity)
                 if (si in s.indices && i in s[si].indices) s[si].removeAt(i)
-                Prefs.setTypingSets(this@MainActivity, s)
-                OverlayService.refreshIfRunning()
-                renderImages()
+                Prefs.setTypingSteps(this@MainActivity, s)
+                imagesChanged()
             })
 
             addView(spacer(6))
             addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_add_image)
-                setOnClickListener { pickImages(CAT_TYPING, si) }
+                text = getString(R.string.btn_add_variant)
+                setOnClickListener { pickImages(CAT_STEP, si) }
             })
             addView(spacer(16))
         }
 
         addView(Button(this@MainActivity).apply {
-            text = getString(R.string.btn_add_set)
+            text = getString(R.string.btn_add_step)
+            setOnClickListener { pickImages(CAT_STEP, steps.size) } // 選んだ画像で新しい番号を作る
+        })
+    }
+
+    /** 文字で切り替え(反応する文字は複数OK、画像はランダム表示) */
+    private fun triggersCard(): LinearLayout = sectionCard {
+        addView(smallLabel(getString(R.string.label_triggers)))
+        addView(descLabel(getString(R.string.desc_triggers)))
+        addView(spacer(12))
+
+        val triggers = Prefs.getTriggers(this@MainActivity)
+        if (triggers.isEmpty()) {
+            addView(descLabel(getString(R.string.empty_hint)))
+            addView(spacer(8))
+        }
+
+        triggers.forEachIndexed { ti, t ->
+            addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.trigger_keys_label, formatKeys(t.keys))
+                textSize = 14f
+                setTextColor(ink)
+            })
+
+            val buttons = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
+            buttons.addView(Button(this@MainActivity).apply {
+                text = getString(R.string.btn_edit_keys)
+                setOnClickListener {
+                    showKeysDialog(t.keys) { keys ->
+                        val all = Prefs.getTriggers(this@MainActivity)
+                        if (ti in all.indices) all[ti].keys = keys
+                        Prefs.setTriggers(this@MainActivity, all)
+                        imagesChanged()
+                    }
+                }
+            })
+            buttons.addView(Button(this@MainActivity).apply {
+                text = getString(R.string.btn_remove)
+                setOnClickListener {
+                    val all = Prefs.getTriggers(this@MainActivity)
+                    if (ti in all.indices) all.removeAt(ti)
+                    Prefs.setTriggers(this@MainActivity, all)
+                    imagesChanged()
+                }
+            })
+            addView(buttons)
+            addView(spacer(6))
+
+            addView(thumbStrip(t.images) { i ->
+                val all = Prefs.getTriggers(this@MainActivity)
+                if (ti in all.indices && i in all[ti].images.indices) all[ti].images.removeAt(i)
+                Prefs.setTriggers(this@MainActivity, all)
+                imagesChanged()
+            })
+
+            addView(spacer(6))
+            addView(Button(this@MainActivity).apply {
+                text = getString(R.string.btn_add_image)
+                setOnClickListener { pickImages(CAT_TRIGGER, ti) }
+            })
+            addView(spacer(16))
+        }
+
+        addView(Button(this@MainActivity).apply {
+            text = getString(R.string.btn_add_trigger)
             setOnClickListener {
-                val s = Prefs.getTypingSets(this@MainActivity)
-                s.add(mutableListOf())
-                Prefs.setTypingSets(this@MainActivity, s)
-                renderImages()
+                showKeysDialog(emptyList()) { keys ->
+                    val all = Prefs.getTriggers(this@MainActivity)
+                    all.add(Prefs.Trigger(keys, mutableListOf()))
+                    Prefs.setTriggers(this@MainActivity, all)
+                    renderImages()
+                    pickImages(CAT_TRIGGER, all.size - 1) // そのまま画像選択へ
+                }
             }
         })
     }
 
-    /** サムネイルを横スクロールで並べる。numbered=trueなら表示順の番号を付ける */
-    private fun thumbStrip(uris: List<String>, numbered: Boolean, onRemove: (Int) -> Unit): View {
+    private fun formatKeys(keys: List<String>): String =
+        keys.joinToString(" ") { getString(R.string.key_format, it) }
+
+    /** 反応する文字を入力するダイアログ(スペース区切りで複数) */
+    private fun showKeysDialog(current: List<String>, onOk: (MutableList<String>) -> Unit) {
+        val input = EditText(this).apply {
+            setText(current.joinToString(" "))
+            hint = getString(R.string.dialog_keys_hint)
+            setSingleLine(true)
+        }
+        val box = LinearLayout(this).apply {
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.dialog_keys_title))
+            .setView(box)
+            .setPositiveButton(getString(R.string.btn_ok)) { _, _ ->
+                val keys = input.text.toString()
+                    .split(Regex("[\\s\\u3000]+"))
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .toMutableList()
+                if (keys.isEmpty()) {
+                    Toast.makeText(this, getString(R.string.toast_keys_empty), Toast.LENGTH_SHORT).show()
+                } else {
+                    onOk(keys)
+                }
+            }
+            .setNegativeButton(getString(R.string.btn_cancel), null)
+            .show()
+    }
+
+    /** サムネイルを横スクロールで並べる */
+    private fun thumbStrip(uris: List<String>, onRemove: (Int) -> Unit): View {
         if (uris.isEmpty()) return descLabel(getString(R.string.empty_hint))
 
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -438,14 +658,6 @@ class MainActivity : Activity() {
                 setBackgroundColor(Color.parseColor("#EEE0D3"))
                 thumbFor(uri)?.let { setImageBitmap(it) }
             })
-            if (numbered) {
-                cell.addView(TextView(this).apply {
-                    text = "${i + 1}"
-                    textSize = 11f
-                    setTextColor(sub)
-                    gravity = Gravity.CENTER
-                })
-            }
             cell.addView(Button(this).apply {
                 text = getString(R.string.btn_remove)
                 textSize = 11f
@@ -463,9 +675,9 @@ class MainActivity : Activity() {
         return bmp
     }
 
-    private fun pickImages(category: String, setIndex: Int) {
+    private fun pickImages(category: String, index: Int) {
         pendingCategory = category
-        pendingSetIndex = setIndex
+        pendingIndex = index
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "image/*"
@@ -533,22 +745,27 @@ class MainActivity : Activity() {
         }
         val added = uris.map { it.toString() }
 
-        if (pendingCategory == CAT_TYPING) {
-            val s = Prefs.getTypingSets(this)
-            if (pendingSetIndex in s.indices) {
-                s[pendingSetIndex].addAll(added)
-            } else {
-                s.add(added.toMutableList())
+        when (pendingCategory) {
+            CAT_STEP -> {
+                val s = Prefs.getTypingSteps(this)
+                if (pendingIndex in s.indices) s[pendingIndex].addAll(added) else s.add(added.toMutableList())
+                Prefs.setTypingSteps(this, s)
             }
-            Prefs.setTypingSets(this, s)
-        } else if (pendingCategory.isNotEmpty()) {
-            val list = Prefs.getImages(this, pendingCategory)
-            list.addAll(added)
-            Prefs.setImages(this, pendingCategory, list)
+            CAT_TRIGGER -> {
+                val all = Prefs.getTriggers(this)
+                if (pendingIndex in all.indices) {
+                    all[pendingIndex].images.addAll(added)
+                    Prefs.setTriggers(this, all)
+                }
+            }
+            Prefs.CAT_IDLE -> {
+                val list = Prefs.getImages(this, Prefs.CAT_IDLE)
+                list.addAll(added)
+                Prefs.setImages(this, Prefs.CAT_IDLE, list)
+            }
         }
 
-        OverlayService.refreshIfRunning()
-        renderImages()
+        imagesChanged()
     }
 
     // ---------- 共通UI部品 ----------

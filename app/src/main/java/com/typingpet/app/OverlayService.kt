@@ -27,9 +27,9 @@ class OverlayService : Service() {
             instance?.petView?.post { instance?.petView?.react() }
         }
 
-        /** 「！」または「？」が入力された時に呼ぶ */
-        fun reactSpecial(special: Char) {
-            instance?.petView?.post { instance?.petView?.react(special) }
+        /** 登録した文字が入力された時に呼ぶ(index は Prefs.getTriggers の番号) */
+        fun reactTrigger(index: Int) {
+            instance?.petView?.post { instance?.petView?.react(index) }
         }
 
         /** 設定画面での変更を、動作中のオーバーレイに即反映する */
@@ -86,13 +86,12 @@ class OverlayService : Service() {
         val req = dpToPx(260) // 最大サイズ(特大)に合わせて縮小読み込み
 
         val idleUris = Prefs.getImages(this, Prefs.CAT_IDLE)
-        val setUris = Prefs.getTypingSets(this)
-        val exUris = Prefs.getImages(this, Prefs.CAT_EXCLAIM)
-        val qUris = Prefs.getImages(this, Prefs.CAT_QUESTION)
+        val stepUris = Prefs.getTypingSteps(this)
+        val triggers = Prefs.getTriggers(this)
 
         // 使われなくなった画像はキャッシュから外す
         val inUse = HashSet<String>().apply {
-            addAll(idleUris); setUris.forEach { addAll(it) }; addAll(exUris); addAll(qUris)
+            addAll(idleUris); stepUris.forEach { addAll(it) }; triggers.forEach { addAll(it.images) }
         }
         bitmapCache.keys.retainAll(inUse)
 
@@ -101,9 +100,8 @@ class OverlayService : Service() {
 
         petView.setImages(
             idle = idleUris.mapNotNull { get(it) },
-            sets = setUris.map { s -> s.mapNotNull { get(it) } },
-            exclaim = exUris.mapNotNull { get(it) },
-            question = qUris.mapNotNull { get(it) }
+            steps = stepUris.map { s -> s.mapNotNull { get(it) } },
+            triggers = triggers.map { t -> t.images.mapNotNull { get(it) } }
         )
     }
 

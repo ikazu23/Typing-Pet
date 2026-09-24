@@ -15,9 +15,9 @@ import android.view.animation.OvershootInterpolator
 /**
  * タイピングに反応するペット。
  * - 待機中: 待機イラストからランダムで1枚
- * - 入力中: 打ち始めにタイピングセットをランダムで1つ選び、打鍵ごとにセット内を順番に表示
- * - ！／？: それぞれの画像からランダムで1枚
- * 入力が IDLE_REVERT_DELAY_MS 止まると待機に戻る。
+ * - 入力中: 1番目→2番目→…の順に切り替え。各番号では登録された別パターンからランダムで1枚
+ * - 文字で切り替え: 登録文字が入力されたら、その画像からランダムで1枚
+ * 入力が IDLE_REVERT_DELAY_MS 止まると待機に戻り、次は1番目から始まる。
  * 画像が1枚もなければ内蔵イラスト(4色 x 表情)で動く。
  */
 class PetView(context: Context) : View(context) {
@@ -34,13 +34,10 @@ class PetView(context: Context) : View(context) {
     var shakeLevel = 3
 
     private var idleFrames: List<Bitmap> = emptyList()
-    private var typingSets: List<List<Bitmap>> = emptyList()
-    private var exclaimFrames: List<Bitmap> = emptyList()
-    private var questionFrames: List<Bitmap> = emptyList()
+    private var steps: List<List<Bitmap>> = emptyList()
+    private var triggerFrames: List<List<Bitmap>> = emptyList()
 
-    private var typing = false
-    private var currentSet: List<Bitmap>? = null
-    private var setIndex = -1
+    private var stepIndex = -1
     private var idleBitmap: Bitmap? = null
     private var shown: Bitmap? = null
     private var builtInFace = 0
@@ -70,54 +67,39 @@ class PetView(context: Context) : View(context) {
     private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#59FFFFFF") }
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-    /** 画像一式を差し替える(設定変更時にOverlayServiceから呼ばれる) */
-    fun setImages(
-        idle: List<Bitmap>,
-        sets: List<List<Bitmap>>,
-        exclaim: List<Bitmap>,
-        question: List<Bitmap>
-    ) {
+    /**
+     * 画像一式を差し替える(設定変更時にOverlayServiceから呼ばれる)。
+     * triggers は Prefs.getTriggers と同じ並びにすること(番号で対応づけるため)。
+     */
+    fun setImages(idle: List<Bitmap>, steps: List<List<Bitmap>>, triggers: List<List<Bitmap>>) {
         idleFrames = idle
-        typingSets = sets.filter { it.isNotEmpty() }
-        exclaimFrames = exclaim
-        questionFrames = question
+        this.steps = steps.filter { it.isNotEmpty() }
+        triggerFrames = triggers
         goIdle()
     }
 
     private fun goIdle() {
         revertHandler.removeCallbacks(revertRunnable)
-        typing = false
-        currentSet = null
-        setIndex = -1
+        stepIndex = -1
         builtInFace = 0
-        idleBitmap = idleFrames.randomOrNull() ?: typingSets.firstOrNull()?.firstOrNull()
+        idleBitmap = idleFrames.randomOrNull() ?: steps.firstOrNull()?.randomOrNull()
         shown = idleBitmap
         invalidate()
     }
 
     /**
-     * 打鍵イベントごとに呼ぶ。special に '!' か '?' を渡すと、その画像からランダムで表示する。
+     * 打鍵イベントごとに呼ぶ。trigger に「文字で切り替え」の番号を渡すと、その画像からランダムで表示する。
      */
-    fun react(special: Char? = null) {
+    fun react(trigger: Int = -1) {
         revertHandler.removeCallbacks(revertRunnable)
 
-        if (!typing) {
-            typing = true
-            currentSet = typingSets.randomOrNull()
-            setIndex = -1
-        }
-
-        val set = currentSet
-        if (set != null) setIndex = (setIndex + 1) % set.size
+        if (steps.isNotEmpty()) stepIndex = (stepIndex + 1) % steps.size
         builtInFace = (builtInFace % 3) + 1 // 内蔵イラストは入力中 表情1〜3を循環
 
-        val specialBmp = when (special) {
-            '!' -> exclaimFrames.randomOrNull()
-            '?' -> questionFrames.randomOrNull()
-            else -> null
-        }
+        val triggerBmp = if (trigger >= 0) triggerFrames.getOrNull(trigger)?.randomOrNull() else null
+        val stepBmp = steps.getOrNull(stepIndex)?.randomOrNull()
 
-        shown = specialBmp ?: set?.getOrNull(setIndex) ?: idleBitmap
+        shown = triggerBmp ?: stepBmp ?: idleBitmap
         invalidate()
 
         revertHandler.postDelayed(revertRunnable, IDLE_REVERT_DELAY_MS)
