@@ -48,4 +48,9 @@
     <string name="desc_special">설정하면 !나 ?를 입력하는 순간에만 이 이미지로 바뀝니다(내용은 저장·전송하지 않고 그 순간에 기호가 포함되어 있는지만 확인합니다). 입력이 멈추면 잠시 후 자동으로 원래 모습으로 돌아갑니다. 설정하지 않으면 기존과 동일하게 동작합니다.</string>
     <string name="label_exclaim">\"!\" 용</string>
     <string name="label_question">\"?\" 용</string>
+
+    <string name="label_icon_section">홈 화면 아이콘(선택)</string>
+    <string name="desc_icon_section">Android 특성상 앱 자체의 아이콘은 설치 후에 바꿀 수 없습니다. 대신 선택한 이미지를 사용한 바로가기를 홈 화면에 추가할 수 있습니다. 추가한 뒤에는 그 아이콘으로 앱을 열어주세요.</string>
+    <string name="btn_add_icon_shortcut">이미지를 선택해 홈 화면에 추가</string>
+    <string name="toast_icon_not_supported">이 기기는 홈 화면 아이콘 추가를 지원하지 않습니다</string>
 </resources>
