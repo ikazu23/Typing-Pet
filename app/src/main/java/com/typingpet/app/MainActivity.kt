@@ -41,7 +41,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "🐾 タイピングペット 設定"
+            text = getString(R.string.title_settings)
             textSize = 20f
             setTextColor(ink)
             gravity = Gravity.CENTER
@@ -49,22 +49,22 @@ class MainActivity : Activity() {
         })
 
         root.addView(sectionCard {
-            addView(smallLabel("権限とペットの表示"))
+            addView(smallLabel(getString(R.string.section_permission)))
             addView(spacer(8))
             addView(Button(this@MainActivity).apply {
-                text = "① 他のアプリの上に表示を許可"
+                text = getString(R.string.btn_overlay)
                 setOnClickListener {
                     startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                 }
             })
             addView(spacer(8))
             addView(Button(this@MainActivity).apply {
-                text = "② アクセシビリティ設定を開く"
+                text = getString(R.string.btn_accessibility)
                 setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
             })
             addView(spacer(8))
             addView(Button(this@MainActivity).apply {
-                text = "③ ペットを表示する"
+                text = getString(R.string.btn_show_pet)
                 setOnClickListener {
                     if (Settings.canDrawOverlays(this@MainActivity)) {
                         startService(Intent(this@MainActivity, OverlayService::class.java))
@@ -106,7 +106,11 @@ class MainActivity : Activity() {
 
     private fun renderTabs() {
         tabBar.removeAllViews()
-        listOf("基本設定", "プリセット", "イラスト").forEachIndexed { i, label ->
+        listOf(
+            getString(R.string.tab_basic),
+            getString(R.string.tab_preset),
+            getString(R.string.tab_image)
+        ).forEachIndexed { i, label ->
             tabBar.addView(Button(this).apply {
                 text = label
                 val selected = currentTab == i
@@ -126,10 +130,15 @@ class MainActivity : Activity() {
         basicBox.removeAllViews()
 
         basicBox.addView(sectionCard {
-            addView(smallLabel("サイズ"))
+            addView(smallLabel(getString(R.string.label_size)))
             addView(spacer(8))
             addView(segRow(
-                listOf("小" to "small", "中" to "medium", "大" to "large", "特大" to "xlarge"),
+                listOf(
+                    getString(R.string.size_small) to "small",
+                    getString(R.string.size_medium) to "medium",
+                    getString(R.string.size_large) to "large",
+                    getString(R.string.size_xlarge) to "xlarge"
+                ),
                 Prefs.getSizeKey(this@MainActivity)
             ) { key ->
                 Prefs.setSizeKey(this@MainActivity, key)
@@ -141,11 +150,16 @@ class MainActivity : Activity() {
         basicBox.addView(spacer(16))
 
         basicBox.addView(sectionCard {
-            addView(smallLabel("揺れの強さ"))
-            addView(descLabel("タイピング時にペットが揺れる度合いです。「なし」は動かず画像だけ切り替わります。"))
+            addView(smallLabel(getString(R.string.label_shake)))
+            addView(descLabel(getString(R.string.desc_shake)))
             addView(spacer(8))
             addView(segRow(
-                listOf("なし" to "0", "1段階" to "1", "2段階" to "2", "3段階" to "3"),
+                listOf(
+                    getString(R.string.shake_none) to "0",
+                    getString(R.string.shake_1) to "1",
+                    getString(R.string.shake_2) to "2",
+                    getString(R.string.shake_3) to "3"
+                ),
                 Prefs.getShakeLevel(this@MainActivity).toString()
             ) { key ->
                 Prefs.setShakeLevel(this@MainActivity, key.toInt())
@@ -157,12 +171,12 @@ class MainActivity : Activity() {
         basicBox.addView(spacer(16))
 
         basicBox.addView(sectionCard {
-            addView(smallLabel("表示"))
+            addView(smallLabel(getString(R.string.label_display)))
             addView(spacer(4))
 
             addView(switchRow(
-                "常に最前面に固定",
-                "ONだと他のアプリを開いたときも自動でペットが現れます。OFFだと③ボタンを押した時だけ表示されます。",
+                getString(R.string.switch_always_on_top_title),
+                getString(R.string.switch_always_on_top_desc),
                 Prefs.getAlwaysOnTop(this@MainActivity)
             ) { checked ->
                 Prefs.setAlwaysOnTop(this@MainActivity, checked)
@@ -171,8 +185,8 @@ class MainActivity : Activity() {
             addView(spacer(12))
 
             addView(switchRow(
-                "位置ロック(タップを素通し)",
-                "ONにするとタップが下のアプリに通り抜け、ドラッグで動かせなくなります。",
+                getString(R.string.switch_lock_title),
+                getString(R.string.switch_lock_desc),
                 Prefs.getPositionLocked(this@MainActivity)
             ) { checked ->
                 Prefs.setPositionLocked(this@MainActivity, checked)
@@ -182,7 +196,7 @@ class MainActivity : Activity() {
             addView(spacer(12))
 
             addView(Button(this@MainActivity).apply {
-                text = "位置を初期化"
+                text = getString(R.string.btn_reset_pos)
                 setOnClickListener {
                     Prefs.resetPos(this@MainActivity)
                     OverlayService.refreshIfRunning()
@@ -197,8 +211,8 @@ class MainActivity : Activity() {
         presetBox.removeAllViews()
 
         presetBox.addView(sectionCard {
-            addView(smallLabel("内蔵カラー"))
-            addView(descLabel("イラストタブで画像を追加していない間は、ここで選んだ色が使われます。"))
+            addView(smallLabel(getString(R.string.label_builtin_color)))
+            addView(descLabel(getString(R.string.desc_builtin_color)))
             addView(spacer(12))
 
             val row = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
@@ -221,7 +235,7 @@ class MainActivity : Activity() {
                 }
                 cell.addView(preview)
                 cell.addView(TextView(this@MainActivity).apply {
-                    text = if (i == current) "選択中" else "選ぶ"
+                    text = if (i == current) getString(R.string.label_selected) else getString(R.string.label_select)
                     textSize = 12f
                     setTextColor(if (i == current) accent else sub)
                     gravity = Gravity.CENTER
@@ -235,15 +249,13 @@ class MainActivity : Activity() {
     // ---------- イラストタブ ----------
 
     private val imagePreviews = arrayOfNulls<ImageView>(4)
-    private var exclaimThumb: ImageView? = null
-    private var questionThumb: ImageView? = null
 
     private fun renderImages() {
         imageBox.removeAllViews()
 
         imageBox.addView(sectionCard {
-            addView(smallLabel("自分のイラストを追加(最大4枚)"))
-            addView(descLabel("1枚だけ追加した場合はその画像が常に表示され、複数追加すると打鍵ごとに順番に切り替わります。全部削除すると内蔵カラーに戻ります。"))
+            addView(smallLabel(getString(R.string.label_add_illust)))
+            addView(descLabel(getString(R.string.desc_add_illust)))
             addView(spacer(12))
 
             for (i in 0 until 4) {
@@ -255,32 +267,30 @@ class MainActivity : Activity() {
         imageBox.addView(spacer(16))
 
         imageBox.addView(sectionCard {
-            addView(smallLabel("「！」「？」専用イラスト(任意)"))
-            addView(descLabel("設定すると、！または？を入力した瞬間だけこの画像に切り替わります(内容は保存・送信せず、記号が含まれるかをその場で見るだけです)。未設定ならいつも通りの反応のままです。"))
+            addView(smallLabel(getString(R.string.label_special)))
+            addView(descLabel(getString(R.string.desc_special)))
             addView(spacer(12))
 
-            exclaimThumb = ImageView(this@MainActivity)
             addView(specialImageRow(
-                "！用",
-                exclaimThumb!!,
+                getString(R.string.label_exclaim),
                 Prefs.getExclaimUri(this@MainActivity),
                 requestCode = 310,
                 onRemove = {
                     Prefs.setExclaimUri(this@MainActivity, null)
+                    OverlayService.refreshIfRunning()
                     renderImages()
                 }
             ))
 
             addView(spacer(10))
 
-            questionThumb = ImageView(this@MainActivity)
             addView(specialImageRow(
-                "？用",
-                questionThumb!!,
+                getString(R.string.label_question),
                 Prefs.getQuestionUri(this@MainActivity),
                 requestCode = 311,
                 onRemove = {
                     Prefs.setQuestionUri(this@MainActivity, null)
+                    OverlayService.refreshIfRunning()
                     renderImages()
                 }
             ))
@@ -306,14 +316,14 @@ class MainActivity : Activity() {
         row.addView(thumb)
 
         val label = TextView(this).apply {
-            text = "枠 ${index + 1}"
+            text = getString(R.string.frame_label, index + 1)
             setTextColor(ink)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         row.addView(label)
 
         row.addView(Button(this).apply {
-            text = "追加"
+            text = getString(R.string.btn_add)
             setOnClickListener {
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
@@ -324,7 +334,7 @@ class MainActivity : Activity() {
         })
 
         row.addView(Button(this).apply {
-            text = "削除"
+            text = getString(R.string.btn_remove)
             setOnClickListener {
                 Prefs.setCustomFrameSlot(this@MainActivity, index, null)
                 OverlayService.refreshIfRunning()
@@ -338,7 +348,6 @@ class MainActivity : Activity() {
     /** ！／？専用スロットの1行を作る(枠1〜4とは別で、単一画像のみ) */
     private fun specialImageRow(
         label: String,
-        thumb: ImageView,
         currentUri: String?,
         requestCode: Int,
         onRemove: () -> Unit
@@ -348,13 +357,13 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        thumb.layoutParams = LinearLayout.LayoutParams(dp(56), dp(56)).apply { marginEnd = dp(12) }
-        thumb.scaleType = ImageView.ScaleType.CENTER_CROP
-        thumb.setBackgroundColor(Color.parseColor("#EEE0D3"))
+        val thumb = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(56), dp(56)).apply { marginEnd = dp(12) }
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(Color.parseColor("#EEE0D3"))
+        }
         if (currentUri != null) {
             try { thumb.setImageURI(Uri.parse(currentUri)) } catch (e: Exception) {}
-        } else {
-            thumb.setImageURI(null)
         }
         row.addView(thumb)
 
@@ -365,7 +374,7 @@ class MainActivity : Activity() {
         })
 
         row.addView(Button(this).apply {
-            text = "追加"
+            text = getString(R.string.btn_add)
             setOnClickListener {
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
@@ -376,7 +385,7 @@ class MainActivity : Activity() {
         })
 
         row.addView(Button(this).apply {
-            text = "削除"
+            text = getString(R.string.btn_remove)
             setOnClickListener { onRemove() }
         })
 

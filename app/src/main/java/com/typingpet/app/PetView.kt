@@ -7,6 +7,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 
 /**
@@ -14,9 +16,14 @@ import android.view.View
  * customFrames が空なら内蔵の描画イラスト(4色プリセット x 4表情)、
  * 空でなければユーザーが追加した画像を順番に切り替えて表示する。
  * 「！」「？」が入力された時は、専用イラスト(exclaimFrame/questionFrame)が
- * 設定されていればそれを優先表示する。
+ * 設定されていればそれを優先表示し、SPECIAL_REVERT_DELAY_MS だけ入力が
+ * 止まると自動的に通常表示へ戻る。
  */
 class PetView(context: Context) : View(context) {
+
+    companion object {
+        private const val SPECIAL_REVERT_DELAY_MS = 1500L
+    }
 
     var preset = 0
         set(value) { field = value; invalidate() }
@@ -38,6 +45,12 @@ class PetView(context: Context) : View(context) {
     private var scaleY = 1f
     private var count = 0
 
+    private val revertHandler = Handler(Looper.getMainLooper())
+    private val revertRunnable = Runnable {
+        activeSpecial = null
+        invalidate()
+    }
+
     private val presetColors = listOf(
         "#FF9D6C" to "#7CC9A9",
         "#6CA8FF" to "#FFD76C",
@@ -58,9 +71,12 @@ class PetView(context: Context) : View(context) {
 
     /**
      * 打鍵イベントごとに呼ぶ。
-     * special に '!' か '?' を渡すと、対応する専用イラストがあればそれを表示する。
+     * special に '!' か '?' を渡すと、対応する専用イラストがあればそれを表示し、
+     * 一定時間後に自動で通常表示へ戻る。
      */
     fun react(special: Char? = null) {
+        revertHandler.removeCallbacks(revertRunnable)
+
         activeSpecial = when (special) {
             '!' -> exclaimFrame
             '?' -> questionFrame
@@ -71,6 +87,10 @@ class PetView(context: Context) : View(context) {
         val frameCount = if (customFrames.isNotEmpty()) customFrames.size else 4
         frame = count % frameCount
         invalidate()
+
+        if (activeSpecial != null) {
+            revertHandler.postDelayed(revertRunnable, SPECIAL_REVERT_DELAY_MS)
+        }
 
         if (shakeLevel <= 0) return
         val dip = when (shakeLevel) { 1 -> 0.96f; 2 -> 0.92f; else -> 0.86f }
