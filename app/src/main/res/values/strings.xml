@@ -48,4 +48,9 @@
     <string name="desc_special">設定すると、！または？を入力した瞬間だけこの画像に切り替わります(内容は保存・送信せず、記号が含まれるかをその場で見るだけです)。入力が止まるとしばらくして自動的に通常表示へ戻ります。未設定ならいつも通りの反応のままです。</string>
     <string name="label_exclaim">！用</string>
     <string name="label_question">？用</string>
+
+    <string name="label_icon_section">ホーム画面のアイコン(任意)</string>
+    <string name="desc_icon_section">Androidの仕組み上、アプリ本体のアイコンは後から書き換えられません。代わりに、選んだ画像を使ったショートカットをホーム画面に追加できます。追加後はそちらのアイコンからアプリを開いてください。</string>
+    <string name="btn_add_icon_shortcut">画像を選んでホーム画面に追加</string>
+    <string name="toast_icon_not_supported">この端末はホーム画面へのアイコン追加に対応していません</string>
 </resources>
