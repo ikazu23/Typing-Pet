@@ -2,7 +2,6 @@ name: Build APK
 
 on:
   push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -14,17 +13,33 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
-
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
+          java-version: 17
 
       - uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: 8.4
+          gradle-version: "8.4"
 
-      - name: Build debug APK
+      # 固定の署名鍵を Secrets から復元(毎回同じ鍵で署名 → 上書き更新できる)
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Secret KEYSTORE_BASE64 が未登録です"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > app/typingpet.jks
+
+      - name: Build
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle assembleDebug
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f app/typingpet.jks
 
       - uses: actions/upload-artifact@v4
         with:
