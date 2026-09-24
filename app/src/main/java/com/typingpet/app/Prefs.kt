@@ -68,6 +68,13 @@ object Prefs {
     private const val KEY_QUESTION_V2 = "questionImages"
     private const val KEY_MIGRATED_V2 = "imagesV2"
     private const val KEY_MIGRATED_V3 = "imagesV3"
+    private const val KEY_MIGRATED_V4 = "imagesV4"
+
+    /** 最初から用意しておく文字の反応(画像はユーザーが追加。画像が0枚の間は照合しない) */
+    private fun defaultTriggers(): MutableList<Trigger> = mutableListOf(
+        Trigger(mutableListOf("!", "！"), mutableListOf()),
+        Trigger(mutableListOf("?", "？"), mutableListOf())
+    )
 
     private fun parseList(arr: JSONArray?): MutableList<String> {
         val list = mutableListOf<String>()
@@ -139,6 +146,24 @@ object Prefs {
             e.putString(KEY_TRIGGERS, triggersToJson(triggers))
 
             e.putBoolean(KEY_MIGRATED_V3, true).apply()
+        }
+
+        // v3 → v4(「！」「？」を最初から用意。既にあれば何もしない)
+        if (!p.getBoolean(KEY_MIGRATED_V4, false)) {
+            val current = try {
+                val arr = JSONArray(p.getString(KEY_TRIGGERS, "[]") ?: "[]")
+                (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map {
+                    Trigger(parseList(it.optJSONArray("k")), parseList(it.optJSONArray("i")))
+                }.toMutableList()
+            } catch (ex: Exception) { mutableListOf() }
+
+            val existing = current.flatMap { it.keys }.toSet()
+            defaultTriggers().forEach { d ->
+                if (d.keys.none { it in existing }) current.add(d)
+            }
+            p.edit().putString(KEY_TRIGGERS, triggersToJson(current))
+                .putBoolean(KEY_MIGRATED_V4, true).apply()
+            matchKeysCache = null
         }
     }
 
@@ -275,7 +300,7 @@ object Prefs {
                 .put("n", name)
                 .put("idle", JSONArray())
                 .put("steps", JSONArray())
-                .put("tr", JSONArray())
+                .put("tr", JSONArray(triggersToJson(defaultTriggers())))
                 .put("preset", arr.length() % 4)
         }
         arr.put(o)
