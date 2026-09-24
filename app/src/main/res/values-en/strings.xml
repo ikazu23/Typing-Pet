@@ -1,1 +1,51 @@
-あ
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TypingPet</string>
+
+    <string name="title_settings">🐾 TypingPet Settings</string>
+
+    <string name="section_permission">Permissions &amp; Display</string>
+    <string name="btn_overlay">① Allow display over other apps</string>
+    <string name="btn_accessibility">② Open accessibility settings</string>
+    <string name="btn_show_pet">③ Show the pet</string>
+
+    <string name="tab_basic">Basic</string>
+    <string name="tab_preset">Presets</string>
+    <string name="tab_image">Images</string>
+
+    <string name="label_size">Size</string>
+    <string name="size_small">S</string>
+    <string name="size_medium">M</string>
+    <string name="size_large">L</string>
+    <string name="size_xlarge">XL</string>
+
+    <string name="label_shake">Shake intensity</string>
+    <string name="desc_shake">How much the pet shakes when you type. \"None\" just switches images without moving.</string>
+    <string name="shake_none">None</string>
+    <string name="shake_1">Level 1</string>
+    <string name="shake_2">Level 2</string>
+    <string name="shake_3">Level 3</string>
+
+    <string name="label_display">Display</string>
+    <string name="switch_always_on_top_title">Always on top</string>
+    <string name="switch_always_on_top_desc">When ON, the pet appears automatically whenever you open another app. When OFF, it only shows after tapping button ③.</string>
+    <string name="switch_lock_title">Lock position (pass touches through)</string>
+    <string name="switch_lock_desc">When ON, taps pass through to the app underneath and the pet can\'t be dragged.</string>
+    <string name="btn_reset_pos">Reset position</string>
+
+    <string name="label_builtin_color">Built-in colors</string>
+    <string name="desc_builtin_color">Used whenever you haven\'t added any custom images in the Images tab.</string>
+    <string name="label_selected">Selected</string>
+    <string name="label_select">Select</string>
+
+    <string name="label_add_illust">Add your own images (up to 4)</string>
+    <string name="desc_add_illust">With one image it\'s always shown; with more, they cycle each keystroke. Remove them all to go back to the built-in colors.</string>
+    <string name="frame_label">Slot %1$d</string>
+    <string name="btn_add">Add</string>
+    <string name="btn_remove">Remove</string>
+
+    <string name="label_special">Special images for \"!\" and \"?\" (optional)</string>
+    <string name="desc_special">If set, the pet switches to this image the instant you type ! or ? (nothing is saved or sent \u2014 it only checks in the moment whether the symbol was typed). It reverts to the normal look automatically shortly after you stop typing. Leave unset to keep the usual behavior.</string>
+    <string name="label_exclaim">For \"!\"</string>
+    <string name="label_question">For \"?\"</string>
+</resources>
