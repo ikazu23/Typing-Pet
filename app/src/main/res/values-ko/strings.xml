@@ -38,19 +38,25 @@
     <string name="label_selected">선택됨</string>
     <string name="label_select">선택</string>
 
-    <string name="label_add_illust">내 이미지 추가(최대 4장)</string>
-    <string name="desc_add_illust">1장만 추가하면 항상 그 이미지가 표시되고, 여러 장이면 타이핑할 때마다 순서대로 바뀝니다. 모두 삭제하면 내장 색상으로 돌아갑니다.</string>
-    <string name="frame_label">칸 %1$d</string>
-    <string name="btn_add">추가</string>
     <string name="btn_remove">삭제</string>
 
-    <string name="label_special">\"!\" \"?\" 전용 이미지(선택)</string>
-    <string name="desc_special">설정하면 !나 ?를 입력하는 순간에만 이 이미지로 바뀝니다(내용은 저장·전송하지 않고 그 순간에 기호가 포함되어 있는지만 확인합니다). 입력이 멈추면 잠시 후 자동으로 원래 모습으로 돌아갑니다. 설정하지 않으면 기존과 동일하게 동작합니다.</string>
-    <string name="label_exclaim">\"!\" 용</string>
-    <string name="label_question">\"?\" 용</string>
 
     <string name="label_icon_section">홈 화면 아이콘(선택)</string>
     <string name="desc_icon_section">Android 특성상 앱 자체의 아이콘은 설치 후에 바꿀 수 없습니다. 대신 선택한 이미지를 사용한 바로가기를 홈 화면에 추가할 수 있습니다. 추가한 뒤에는 그 아이콘으로 앱을 열어주세요.</string>
     <string name="btn_add_icon_shortcut">이미지를 선택해 홈 화면에 추가</string>
     <string name="toast_icon_not_supported">이 기기는 홈 화면 아이콘 추가를 지원하지 않습니다</string>
+
+    <string name="label_idle">대기 이미지</string>
+    <string name="desc_idle">입력하지 않을 때 표시됩니다. 여러 장이면 대기로 돌아올 때마다 랜덤으로 1장 선택됩니다. 비어 있으면 타이핑 세트의 첫 장(없으면 내장 색상)을 사용합니다.</string>
+    <string name="label_typing">타이핑 중 이미지(세트)</string>
+    <string name="desc_typing">입력 중에는 세트 안의 이미지가 번호 순서대로 바뀝니다. 세트가 여러 개면 입력을 시작할 때마다 랜덤으로 1세트가 선택됩니다.</string>
+    <string name="set_label">세트 %1$d</string>
+    <string name="btn_add_set">+ 세트 추가</string>
+    <string name="btn_delete_set">세트 삭제</string>
+    <string name="btn_add_image">+ 이미지 추가(여러 장 선택 가능)</string>
+    <string name="empty_hint">아직 이미지가 없습니다</string>
+    <string name="label_exclaim_pool">\"!\" 이미지(선택)</string>
+    <string name="desc_exclaim_pool">!를 입력하는 순간 등록한 것 중 랜덤으로 1장 표시됩니다(내용은 저장·전송하지 않고 그 순간에 기호가 포함되어 있는지만 확인합니다).</string>
+    <string name="label_question_pool">\"?\" 이미지(선택)</string>
+    <string name="desc_question_pool">?를 입력하는 순간 등록한 것 중 랜덤으로 1장 표시됩니다.</string>
 </resources>

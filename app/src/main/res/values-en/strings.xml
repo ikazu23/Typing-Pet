@@ -38,19 +38,25 @@
     <string name="label_selected">Selected</string>
     <string name="label_select">Select</string>
 
-    <string name="label_add_illust">Add your own images (up to 4)</string>
-    <string name="desc_add_illust">With one image it\'s always shown; with more, they cycle each keystroke. Remove them all to go back to the built-in colors.</string>
-    <string name="frame_label">Slot %1$d</string>
-    <string name="btn_add">Add</string>
     <string name="btn_remove">Remove</string>
 
-    <string name="label_special">Special images for \"!\" and \"?\" (optional)</string>
-    <string name="desc_special">If set, the pet switches to this image the instant you type ! or ? (nothing is saved or sent \u2014 it only checks in the moment whether the symbol was typed). It reverts to the normal look automatically shortly after you stop typing. Leave unset to keep the usual behavior.</string>
-    <string name="label_exclaim">For \"!\"</string>
-    <string name="label_question">For \"?\"</string>
 
     <string name="label_icon_section">Home screen icon (optional)</string>
     <string name="desc_icon_section">Android doesn\'t allow apps to change their own icon after install. Instead, you can add a shortcut with an image you pick to the home screen. Use that shortcut to open the app.</string>
     <string name="btn_add_icon_shortcut">Pick an image and add to home screen</string>
     <string name="toast_icon_not_supported">This device doesn\'t support adding icons to the home screen</string>
+
+    <string name="label_idle">Idle images</string>
+    <string name="desc_idle">Shown when you\'re not typing. With several, one is picked at random each time it goes idle. If empty, the first image of a typing set (or the built-in color) is used.</string>
+    <string name="label_typing">Typing images (sets)</string>
+    <string name="desc_typing">While typing, images in a set cycle in numbered order. With several sets, one is picked at random each time you start typing.</string>
+    <string name="set_label">Set %1$d</string>
+    <string name="btn_add_set">+ Add set</string>
+    <string name="btn_delete_set">Delete set</string>
+    <string name="btn_add_image">+ Add images (multi-select OK)</string>
+    <string name="empty_hint">No images yet</string>
+    <string name="label_exclaim_pool">\"!\" images (optional)</string>
+    <string name="desc_exclaim_pool">When you type !, one of these is shown at random (nothing is saved or sent \u2014 it only checks in the moment whether the symbol was typed).</string>
+    <string name="label_question_pool">\"?\" images (optional)</string>
+    <string name="desc_question_pool">When you type ?, one of these is shown at random.</string>
 </resources>

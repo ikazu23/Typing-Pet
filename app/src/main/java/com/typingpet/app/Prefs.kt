@@ -1,6 +1,7 @@
 package com.typingpet.app
 
 import android.content.Context
+import org.json.JSONArray
 
 /** すべての設定をSharedPreferencesで保存・読み込みする */
 object Prefs {
@@ -41,34 +42,89 @@ object Prefs {
     fun getPreset(context: Context): Int = sp(context).getInt("preset", 0)
     fun setPreset(context: Context, preset: Int) = sp(context).edit().putInt("preset", preset).apply()
 
-    // カスタム画像 最大4枠(空きはnull)。 "|||" 区切りの1文字列で保存し、枠の順番を保つ
-    fun getCustomFrameSlots(context: Context): Array<String?> {
-        val raw = sp(context).getString("customFrames", "") ?: ""
-        val parts = raw.split("|||")
-        val arr = arrayOfNulls<String>(4)
-        for (i in 0 until 4) arr[i] = parts.getOrNull(i)?.takeIf { it.isNotBlank() }
-        return arr
-    }
-
-    fun setCustomFrameSlot(context: Context, index: Int, uri: String?) {
-        val current = getCustomFrameSlots(context)
-        current[index] = uri
-        val joined = current.joinToString("|||") { it ?: "" }
-        sp(context).edit().putString("customFrames", joined).apply()
-    }
-
-    fun getCustomFrames(context: Context): List<String> =
-        getCustomFrameSlots(context).filterNotNull()
-
-    // 「！」「？」入力時専用のイラスト(任意設定)
-    fun getExclaimUri(context: Context): String? = sp(context).getString("exclaimUri", null)
-    fun setExclaimUri(context: Context, uri: String?) = sp(context).edit().putString("exclaimUri", uri).apply()
-
-    fun getQuestionUri(context: Context): String? = sp(context).getString("questionUri", null)
-    fun setQuestionUri(context: Context, uri: String?) = sp(context).edit().putString("questionUri", uri).apply()
-
     // 表示言語: "system" / "ja" / "en" / "ko"。未選択の間は初回ポップアップを出す
     fun hasChosenLanguage(context: Context): Boolean = sp(context).contains("language")
     fun getLanguage(context: Context): String = sp(context).getString("language", LANG_SYSTEM) ?: LANG_SYSTEM
     fun setLanguage(context: Context, code: String) = sp(context).edit().putString("language", code).apply()
+
+    // ---------- イラスト: 待機 / タイピング中(セット) / ！ / ？ ----------
+    // 枚数制限なし。JSON配列で保存する。
+
+    const val CAT_IDLE = "idle"
+    const val CAT_EXCLAIM = "exclaim"
+    const val CAT_QUESTION = "question"
+
+    private const val KEY_IDLE = "idleImages"
+    private const val KEY_SETS = "typingSets"
+    private const val KEY_EXCLAIM = "exclaimImages"
+    private const val KEY_QUESTION = "questionImages"
+    private const val KEY_MIGRATED = "imagesV2"
+
+    private fun keyFor(category: String) = when (category) {
+        CAT_EXCLAIM -> KEY_EXCLAIM
+        CAT_QUESTION -> KEY_QUESTION
+        else -> KEY_IDLE
+    }
+
+    /** 旧バージョン(最大4枠＋！？各1枚)の設定を新形式に引き継ぐ */
+    private fun ensureMigrated(context: Context) {
+        val p = sp(context)
+        if (p.getBoolean(KEY_MIGRATED, false)) return
+        val e = p.edit()
+
+        val oldFrames = (p.getString("customFrames", "") ?: "").split("|||").filter { it.isNotBlank() }
+        val sets = JSONArray()
+        if (oldFrames.isNotEmpty()) sets.put(JSONArray(oldFrames))
+        e.putString(KEY_SETS, sets.toString())
+
+        p.getString("exclaimUri", null)?.let { e.putString(KEY_EXCLAIM, JSONArray(listOf(it)).toString()) }
+        p.getString("questionUri", null)?.let { e.putString(KEY_QUESTION, JSONArray(listOf(it)).toString()) }
+
+        e.putBoolean(KEY_MIGRATED, true).apply()
+    }
+
+    private fun parseList(arr: JSONArray): MutableList<String> {
+        val list = mutableListOf<String>()
+        for (i in 0 until arr.length()) {
+            val s = arr.optString(i, "")
+            if (s.isNotBlank()) list.add(s)
+        }
+        return list
+    }
+
+    /** 待機 / ！ / ？ の画像リスト */
+    fun getImages(context: Context, category: String): MutableList<String> {
+        ensureMigrated(context)
+        return try {
+            parseList(JSONArray(sp(context).getString(keyFor(category), "[]") ?: "[]"))
+        } catch (e: Exception) {
+            mutableListOf()
+        }
+    }
+
+    fun setImages(context: Context, category: String, list: List<String>) {
+        sp(context).edit().putString(keyFor(category), JSONArray(list).toString()).apply()
+    }
+
+    /** タイピング中セットのリスト(各セットは順番付きの画像リスト。空のセットも保持する) */
+    fun getTypingSets(context: Context): MutableList<MutableList<String>> {
+        ensureMigrated(context)
+        return try {
+            val outer = JSONArray(sp(context).getString(KEY_SETS, "[]") ?: "[]")
+            val result = mutableListOf<MutableList<String>>()
+            for (i in 0 until outer.length()) {
+                val inner = outer.optJSONArray(i) ?: JSONArray()
+                result.add(parseList(inner))
+            }
+            result
+        } catch (e: Exception) {
+            mutableListOf()
+        }
+    }
+
+    fun setTypingSets(context: Context, sets: List<List<String>>) {
+        val outer = JSONArray()
+        sets.forEach { outer.put(JSONArray(it)) }
+        sp(context).edit().putString(KEY_SETS, outer.toString()).apply()
+    }
 }

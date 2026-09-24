@@ -13,13 +13,12 @@ import android.view.View
 import android.view.animation.OvershootInterpolator
 
 /**
- * 打鍵のたびに表情(または画像)を切り替える丸っこいペット。
- * customFrames が空なら内蔵の描画イラスト(4色プリセット x 4表情)、
- * 空でなければユーザーが追加した画像を順番に切り替えて表示する。
- * 「！」「？」が入力された時は、専用イラスト(exclaimFrame/questionFrame)が
- * 設定されていればそれを優先表示する。
- * どの状態でも、IDLE_REVERT_DELAY_MS だけ入力が止まると自動的に
- * 1枚目(frame=0)の表示に戻る。
+ * タイピングに反応するペット。
+ * - 待機中: 待機イラストからランダムで1枚
+ * - 入力中: 打ち始めにタイピングセットをランダムで1つ選び、打鍵ごとにセット内を順番に表示
+ * - ！／？: それぞれの画像からランダムで1枚
+ * 入力が IDLE_REVERT_DELAY_MS 止まると待機に戻る。
+ * 画像が1枚もなければ内蔵イラスト(4色 x 表情)で動く。
  */
 class PetView(context: Context) : View(context) {
 
@@ -31,35 +30,27 @@ class PetView(context: Context) : View(context) {
     var preset = 0
         set(value) { field = value; invalidate() }
 
-    var customFrames: List<Bitmap> = emptyList()
-        set(value) { field = value; invalidate() }
-
-    var exclaimFrame: Bitmap? = null
-        set(value) { field = value; invalidate() }
-
-    var questionFrame: Bitmap? = null
-        set(value) { field = value; invalidate() }
-
     /** 揺れの強さ 0(なし・画像だけ切り替え)〜3(大きく弾む) */
     var shakeLevel = 3
 
-    private var frame = 0
-    private var activeSpecial: Bitmap? = null
+    private var idleFrames: List<Bitmap> = emptyList()
+    private var typingSets: List<List<Bitmap>> = emptyList()
+    private var exclaimFrames: List<Bitmap> = emptyList()
+    private var questionFrames: List<Bitmap> = emptyList()
 
-    // スクワッシュ&ストレッチ用(縦横逆方向に動かして、もちっとした弾力を出す)
-    private var scaleX = 1f
-    private var scaleY = 1f
+    private var typing = false
+    private var currentSet: List<Bitmap>? = null
+    private var setIndex = -1
+    private var idleBitmap: Bitmap? = null
+    private var shown: Bitmap? = null
+    private var builtInFace = 0
+
+    private var scaleXAnim = 1f
+    private var scaleYAnim = 1f
     private var bounceAnimator: ValueAnimator? = null
 
-    private var count = 0
-
     private val revertHandler = Handler(Looper.getMainLooper())
-    private val revertRunnable = Runnable {
-        activeSpecial = null
-        frame = 0
-        count = 0
-        invalidate()
-    }
+    private val revertRunnable = Runnable { goIdle() }
 
     private val presetColors = listOf(
         "#FF9D6C" to "#7CC9A9",
@@ -79,54 +70,86 @@ class PetView(context: Context) : View(context) {
     private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#59FFFFFF") }
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
+    /** 画像一式を差し替える(設定変更時にOverlayServiceから呼ばれる) */
+    fun setImages(
+        idle: List<Bitmap>,
+        sets: List<List<Bitmap>>,
+        exclaim: List<Bitmap>,
+        question: List<Bitmap>
+    ) {
+        idleFrames = idle
+        typingSets = sets.filter { it.isNotEmpty() }
+        exclaimFrames = exclaim
+        questionFrames = question
+        goIdle()
+    }
+
+    private fun goIdle() {
+        revertHandler.removeCallbacks(revertRunnable)
+        typing = false
+        currentSet = null
+        setIndex = -1
+        builtInFace = 0
+        idleBitmap = idleFrames.randomOrNull() ?: typingSets.firstOrNull()?.firstOrNull()
+        shown = idleBitmap
+        invalidate()
+    }
+
     /**
-     * 打鍵イベントごとに呼ぶ。
-     * special に '!' か '?' を渡すと、対応する専用イラストがあればそれを表示する。
-     * どのケースでも、一定時間入力が止まると自動的に1枚目の表示へ戻る。
+     * 打鍵イベントごとに呼ぶ。special に '!' か '?' を渡すと、その画像からランダムで表示する。
      */
     fun react(special: Char? = null) {
         revertHandler.removeCallbacks(revertRunnable)
 
-        activeSpecial = when (special) {
-            '!' -> exclaimFrame
-            '?' -> questionFrame
+        if (!typing) {
+            typing = true
+            currentSet = typingSets.randomOrNull()
+            setIndex = -1
+        }
+
+        val set = currentSet
+        if (set != null) setIndex = (setIndex + 1) % set.size
+        builtInFace = (builtInFace % 3) + 1 // 内蔵イラストは入力中 表情1〜3を循環
+
+        val specialBmp = when (special) {
+            '!' -> exclaimFrames.randomOrNull()
+            '?' -> questionFrames.randomOrNull()
             else -> null
         }
 
-        count++
-        val frameCount = if (customFrames.isNotEmpty()) customFrames.size else 4
-        frame = count % frameCount
+        shown = specialBmp ?: set?.getOrNull(setIndex) ?: idleBitmap
         invalidate()
 
         revertHandler.postDelayed(revertRunnable, IDLE_REVERT_DELAY_MS)
 
-        if (shakeLevel <= 0) return
-        playBounce()
+        if (shakeLevel > 0) playBounce()
     }
 
-    /**
-     * 縦に潰れて横に伸び、その後オーバーシュートしながら元に戻る
-     * 「もちもち」した弾力アニメーション。
-     */
+    /** 縦に潰れて横に伸び、オーバーシュートしながら戻る「もちもち」アニメ */
     private fun playBounce() {
         bounceAnimator?.cancel()
 
-        // squish: 縦の潰れ量(shakeLevelが大きいほど深く潰れる)
         val squish = when (shakeLevel) { 1 -> 0.95f; 2 -> 0.90f; else -> 0.82f }
-        val stretch = 1f + (1f - squish) * 0.7f // 潰れた分だけ横に膨らむ
-        val overshootTension = when (shakeLevel) { 1 -> 1.4f; 2 -> 1.8f; else -> 2.4f }
+        val stretch = 1f + (1f - squish) * 0.7f
+        val tension = when (shakeLevel) { 1 -> 1.4f; 2 -> 1.8f; else -> 2.4f }
 
         bounceAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = BOUNCE_DURATION_MS
-            interpolator = OvershootInterpolator(overshootTension)
+            interpolator = OvershootInterpolator(tension)
             addUpdateListener {
                 val t = it.animatedValue as Float
-                scaleY = squish + (1f - squish) * t
-                scaleX = stretch + (1f - stretch) * t
+                scaleYAnim = squish + (1f - squish) * t
+                scaleXAnim = stretch + (1f - stretch) * t
                 invalidate()
             }
         }
         bounceAnimator?.start()
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        revertHandler.removeCallbacks(revertRunnable)
+        bounceAnimator?.cancel()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -135,14 +158,10 @@ class PetView(context: Context) : View(context) {
         val cy = height / 2f
 
         canvas.save()
-        canvas.scale(scaleX, scaleY, cx, cy + height * 0.16f)
+        canvas.scale(scaleXAnim, scaleYAnim, cx, cy + height * 0.16f)
 
-        val special = activeSpecial
-        when {
-            special != null -> drawBitmapFrame(canvas, cx, cy, special)
-            customFrames.isNotEmpty() -> drawBitmapFrame(canvas, cx, cy, customFrames[frame % customFrames.size])
-            else -> drawBuiltIn(canvas, cx, cy)
-        }
+        val bmp = shown
+        if (bmp != null) drawBitmapFrame(canvas, cx, cy, bmp) else drawBuiltIn(canvas, cx, cy)
 
         canvas.restore()
     }
@@ -183,7 +202,7 @@ class PetView(context: Context) : View(context) {
         val eyeR = r * 0.12f
         val mouthY = cy + r * 0.42f
 
-        when (frame % 4) {
+        when (builtInFace % 4) {
             0 -> {
                 canvas.drawCircle(cx - eyeDx, eyeY, eyeR, inkFill)
                 canvas.drawCircle(cx + eyeDx, eyeY, eyeR, inkFill)

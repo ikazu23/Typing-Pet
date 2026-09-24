@@ -14,6 +14,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -306,148 +307,171 @@ class MainActivity : Activity() {
 
     // ---------- イラストタブ ----------
 
-    private val imagePreviews = arrayOfNulls<ImageView>(4)
+    private val REQ_PICK = 400
+    private val CAT_TYPING = "typing"
+    private var pendingCategory = ""
+    private var pendingSetIndex = -1
+    private val thumbCache = HashMap<String, Bitmap?>()
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("pendingCategory", pendingCategory)
+        outState.putInt("pendingSetIndex", pendingSetIndex)
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        pendingCategory = savedInstanceState.getString("pendingCategory", "") ?: ""
+        pendingSetIndex = savedInstanceState.getInt("pendingSetIndex", -1)
+    }
 
     private fun renderImages() {
         imageBox.removeAllViews()
 
-        imageBox.addView(sectionCard {
-            addView(smallLabel(getString(R.string.label_add_illust)))
-            addView(descLabel(getString(R.string.desc_add_illust)))
-            addView(spacer(12))
+        imageBox.addView(poolCard(Prefs.CAT_IDLE, R.string.label_idle, R.string.desc_idle))
+        imageBox.addView(spacer(16))
+        imageBox.addView(typingCard())
+        imageBox.addView(spacer(16))
+        imageBox.addView(poolCard(Prefs.CAT_EXCLAIM, R.string.label_exclaim_pool, R.string.desc_exclaim_pool))
+        imageBox.addView(spacer(16))
+        imageBox.addView(poolCard(Prefs.CAT_QUESTION, R.string.label_question_pool, R.string.desc_question_pool))
+    }
 
-            for (i in 0 until 4) {
-                addView(imageSlotRow(i))
-                addView(spacer(10))
-            }
+    /** 待機 / ！ / ？ 用のカード(枚数無制限、表示はランダム) */
+    private fun poolCard(category: String, titleRes: Int, descRes: Int): LinearLayout = sectionCard {
+        addView(smallLabel(getString(titleRes)))
+        addView(descLabel(getString(descRes)))
+        addView(spacer(10))
+
+        addView(thumbStrip(Prefs.getImages(this@MainActivity, category), numbered = false) { i ->
+            val list = Prefs.getImages(this@MainActivity, category)
+            if (i in list.indices) list.removeAt(i)
+            Prefs.setImages(this@MainActivity, category, list)
+            OverlayService.refreshIfRunning()
+            renderImages()
         })
 
-        imageBox.addView(spacer(16))
-
-        imageBox.addView(sectionCard {
-            addView(smallLabel(getString(R.string.label_special)))
-            addView(descLabel(getString(R.string.desc_special)))
-            addView(spacer(12))
-
-            addView(specialImageRow(
-                getString(R.string.label_exclaim),
-                Prefs.getExclaimUri(this@MainActivity),
-                requestCode = 310,
-                onRemove = {
-                    Prefs.setExclaimUri(this@MainActivity, null)
-                    OverlayService.refreshIfRunning()
-                    renderImages()
-                }
-            ))
-
-            addView(spacer(10))
-
-            addView(specialImageRow(
-                getString(R.string.label_question),
-                Prefs.getQuestionUri(this@MainActivity),
-                requestCode = 311,
-                onRemove = {
-                    Prefs.setQuestionUri(this@MainActivity, null)
-                    OverlayService.refreshIfRunning()
-                    renderImages()
-                }
-            ))
+        addView(spacer(8))
+        addView(Button(this@MainActivity).apply {
+            text = getString(R.string.btn_add_image)
+            setOnClickListener { pickImages(category, -1) }
         })
     }
 
-    private fun imageSlotRow(index: Int): LinearLayout {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+    /** タイピング中セットのカード(セット数・各セットの枚数とも無制限) */
+    private fun typingCard(): LinearLayout = sectionCard {
+        addView(smallLabel(getString(R.string.label_typing)))
+        addView(descLabel(getString(R.string.desc_typing)))
+        addView(spacer(12))
+
+        val sets = Prefs.getTypingSets(this@MainActivity)
+        if (sets.isEmpty()) {
+            addView(descLabel(getString(R.string.empty_hint)))
+            addView(spacer(8))
         }
 
-        val thumb = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(56), dp(56)).apply { marginEnd = dp(12) }
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(Color.parseColor("#EEE0D3"))
-        }
-        imagePreviews[index] = thumb
-        val uri = Prefs.getCustomFrameSlots(this)[index]
-        if (uri != null) {
-            try { thumb.setImageURI(Uri.parse(uri)) } catch (e: Exception) {}
-        }
-        row.addView(thumb)
-
-        val label = TextView(this).apply {
-            text = getString(R.string.frame_label, index + 1)
-            setTextColor(ink)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        row.addView(label)
-
-        row.addView(Button(this).apply {
-            text = getString(R.string.btn_add)
-            setOnClickListener {
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "image/*"
-                }
-                startActivityForResult(intent, 300 + index)
+        sets.forEachIndexed { si, set ->
+            val header = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
             }
-        })
+            header.addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.set_label, si + 1)
+                textSize = 14f
+                setTextColor(ink)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            header.addView(Button(this@MainActivity).apply {
+                text = getString(R.string.btn_delete_set)
+                setOnClickListener {
+                    val s = Prefs.getTypingSets(this@MainActivity)
+                    if (si in s.indices) s.removeAt(si)
+                    Prefs.setTypingSets(this@MainActivity, s)
+                    OverlayService.refreshIfRunning()
+                    renderImages()
+                }
+            })
+            addView(header)
+            addView(spacer(6))
 
-        row.addView(Button(this).apply {
-            text = getString(R.string.btn_remove)
-            setOnClickListener {
-                Prefs.setCustomFrameSlot(this@MainActivity, index, null)
+            addView(thumbStrip(set, numbered = true) { i ->
+                val s = Prefs.getTypingSets(this@MainActivity)
+                if (si in s.indices && i in s[si].indices) s[si].removeAt(i)
+                Prefs.setTypingSets(this@MainActivity, s)
                 OverlayService.refreshIfRunning()
+                renderImages()
+            })
+
+            addView(spacer(6))
+            addView(Button(this@MainActivity).apply {
+                text = getString(R.string.btn_add_image)
+                setOnClickListener { pickImages(CAT_TYPING, si) }
+            })
+            addView(spacer(16))
+        }
+
+        addView(Button(this@MainActivity).apply {
+            text = getString(R.string.btn_add_set)
+            setOnClickListener {
+                val s = Prefs.getTypingSets(this@MainActivity)
+                s.add(mutableListOf())
+                Prefs.setTypingSets(this@MainActivity, s)
                 renderImages()
             }
         })
-
-        return row
     }
 
-    /** ！／？専用スロットの1行を作る(枠1〜4とは別で、単一画像のみ) */
-    private fun specialImageRow(
-        label: String,
-        currentUri: String?,
-        requestCode: Int,
-        onRemove: () -> Unit
-    ): LinearLayout {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
+    /** サムネイルを横スクロールで並べる。numbered=trueなら表示順の番号を付ける */
+    private fun thumbStrip(uris: List<String>, numbered: Boolean, onRemove: (Int) -> Unit): View {
+        if (uris.isEmpty()) return descLabel(getString(R.string.empty_hint))
 
-        val thumb = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(56), dp(56)).apply { marginEnd = dp(12) }
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(Color.parseColor("#EEE0D3"))
-        }
-        if (currentUri != null) {
-            try { thumb.setImageURI(Uri.parse(currentUri)) } catch (e: Exception) {}
-        }
-        row.addView(thumb)
-
-        row.addView(TextView(this).apply {
-            text = label
-            setTextColor(ink)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        })
-
-        row.addView(Button(this).apply {
-            text = getString(R.string.btn_add)
-            setOnClickListener {
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "image/*"
-                }
-                startActivityForResult(intent, requestCode)
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        uris.forEachIndexed { i, uri ->
+            val cell = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(0, 0, dp(8), 0)
             }
-        })
+            cell.addView(ImageView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(64), dp(64))
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setBackgroundColor(Color.parseColor("#EEE0D3"))
+                thumbFor(uri)?.let { setImageBitmap(it) }
+            })
+            if (numbered) {
+                cell.addView(TextView(this).apply {
+                    text = "${i + 1}"
+                    textSize = 11f
+                    setTextColor(sub)
+                    gravity = Gravity.CENTER
+                })
+            }
+            cell.addView(Button(this).apply {
+                text = getString(R.string.btn_remove)
+                textSize = 11f
+                setOnClickListener { onRemove(i) }
+            })
+            row.addView(cell)
+        }
+        return HorizontalScrollView(this).apply { addView(row) }
+    }
 
-        row.addView(Button(this).apply {
-            text = getString(R.string.btn_remove)
-            setOnClickListener { onRemove() }
-        })
+    private fun thumbFor(uri: String): Bitmap? {
+        if (thumbCache.containsKey(uri)) return thumbCache[uri]
+        val bmp = ImageLoader.load(this, uri, dp(64))
+        thumbCache[uri] = bmp
+        return bmp
+    }
 
-        return row
+    private fun pickImages(category: String, setIndex: Int) {
+        pendingCategory = category
+        pendingSetIndex = setIndex
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        startActivityForResult(intent, REQ_PICK)
     }
 
     // ---------- ホーム画面アイコン(ショートカット) ----------
@@ -484,36 +508,47 @@ class MainActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK) return
-        val uri = data?.data ?: return
+        if (resultCode != RESULT_OK || data == null) return
 
         if (requestCode == 320) {
-            createIconShortcut(uri)
+            data.data?.let { createIconShortcut(it) }
             return
         }
+        if (requestCode != REQ_PICK) return
 
-        try {
-            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } catch (e: Exception) { /* 一部プロバイダでは付与できない場合がある */ }
-
-        when {
-            requestCode in 300..303 -> {
-                val index = requestCode - 300
-                Prefs.setCustomFrameSlot(this, index, uri.toString())
-                OverlayService.refreshIfRunning()
-                renderImages()
-            }
-            requestCode == 310 -> {
-                Prefs.setExclaimUri(this, uri.toString())
-                OverlayService.refreshIfRunning()
-                renderImages()
-            }
-            requestCode == 311 -> {
-                Prefs.setQuestionUri(this, uri.toString())
-                OverlayService.refreshIfRunning()
-                renderImages()
-            }
+        // 複数選択(clipData)と単体選択(data)の両方に対応
+        val uris = mutableListOf<Uri>()
+        val clip = data.clipData
+        if (clip != null) {
+            for (i in 0 until clip.itemCount) clip.getItemAt(i)?.uri?.let { uris.add(it) }
+        } else {
+            data.data?.let { uris.add(it) }
         }
+        if (uris.isEmpty()) return
+
+        uris.forEach {
+            try {
+                contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: Exception) { /* 一部プロバイダでは付与できない場合がある */ }
+        }
+        val added = uris.map { it.toString() }
+
+        if (pendingCategory == CAT_TYPING) {
+            val s = Prefs.getTypingSets(this)
+            if (pendingSetIndex in s.indices) {
+                s[pendingSetIndex].addAll(added)
+            } else {
+                s.add(added.toMutableList())
+            }
+            Prefs.setTypingSets(this, s)
+        } else if (pendingCategory.isNotEmpty()) {
+            val list = Prefs.getImages(this, pendingCategory)
+            list.addAll(added)
+            Prefs.setImages(this, pendingCategory, list)
+        }
+
+        OverlayService.refreshIfRunning()
+        renderImages()
     }
 
     // ---------- 共通UI部品 ----------

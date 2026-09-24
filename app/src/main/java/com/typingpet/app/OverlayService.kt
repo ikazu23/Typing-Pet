@@ -3,9 +3,7 @@ package com.typingpet.app
 import android.app.Service
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
-import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
@@ -18,6 +16,9 @@ class OverlayService : Service() {
     private lateinit var petView: PetView
     private lateinit var params: WindowManager.LayoutParams
     private var added = false
+
+    /** 読み込み済み画像のキャッシュ(設定変更のたびに全部読み直さないように) */
+    private val bitmapCache = HashMap<String, Bitmap>()
 
     companion object {
         var instance: OverlayService? = null
@@ -43,8 +44,9 @@ class OverlayService : Service() {
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         petView = PetView(this)
-        loadCustomFrames()
-        loadSpecialFrames()
+        petView.preset = Prefs.getPreset(this)
+        petView.shakeLevel = Prefs.getShakeLevel(this)
+        loadImages()
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -57,9 +59,6 @@ class OverlayService : Service() {
         params.gravity = Gravity.TOP or Gravity.START
         params.x = Prefs.getPosX(this)
         params.y = Prefs.getPosY(this)
-
-        petView.preset = Prefs.getPreset(this)
-        petView.shakeLevel = Prefs.getShakeLevel(this)
 
         setupTouch()
 
@@ -83,19 +82,29 @@ class OverlayService : Service() {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
-    private fun loadBitmapFromUri(uriStr: String): Bitmap? = try {
-        contentResolver.openInputStream(Uri.parse(uriStr))?.use { BitmapFactory.decodeStream(it) }
-    } catch (e: Exception) {
-        null
-    }
+    private fun loadImages() {
+        val req = dpToPx(260) // 最大サイズ(特大)に合わせて縮小読み込み
 
-    private fun loadCustomFrames() {
-        petView.customFrames = Prefs.getCustomFrames(this).mapNotNull { loadBitmapFromUri(it) }
-    }
+        val idleUris = Prefs.getImages(this, Prefs.CAT_IDLE)
+        val setUris = Prefs.getTypingSets(this)
+        val exUris = Prefs.getImages(this, Prefs.CAT_EXCLAIM)
+        val qUris = Prefs.getImages(this, Prefs.CAT_QUESTION)
 
-    private fun loadSpecialFrames() {
-        petView.exclaimFrame = Prefs.getExclaimUri(this)?.let { loadBitmapFromUri(it) }
-        petView.questionFrame = Prefs.getQuestionUri(this)?.let { loadBitmapFromUri(it) }
+        // 使われなくなった画像はキャッシュから外す
+        val inUse = HashSet<String>().apply {
+            addAll(idleUris); setUris.forEach { addAll(it) }; addAll(exUris); addAll(qUris)
+        }
+        bitmapCache.keys.retainAll(inUse)
+
+        fun get(uri: String): Bitmap? =
+            bitmapCache[uri] ?: ImageLoader.load(this, uri, req)?.also { bitmapCache[uri] = it }
+
+        petView.setImages(
+            idle = idleUris.mapNotNull { get(it) },
+            sets = setUris.map { s -> s.mapNotNull { get(it) } },
+            exclaim = exUris.mapNotNull { get(it) },
+            question = qUris.mapNotNull { get(it) }
+        )
     }
 
     fun applyPrefs() {
@@ -110,9 +119,7 @@ class OverlayService : Service() {
 
         petView.preset = Prefs.getPreset(this)
         petView.shakeLevel = Prefs.getShakeLevel(this)
-        loadCustomFrames()
-        loadSpecialFrames()
-        petView.invalidate()
+        loadImages()
     }
 
     private fun setupTouch() {
@@ -149,6 +156,7 @@ class OverlayService : Service() {
         super.onDestroy()
         instance = null
         if (added) windowManager.removeView(petView)
+        bitmapCache.clear()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
