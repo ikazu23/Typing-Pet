@@ -1,1 +1,51 @@
-あ
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">타이핑펫</string>
+
+    <string name="title_settings">🐾 타이핑펫 설정</string>
+
+    <string name="section_permission">권한 및 펫 표시</string>
+    <string name="btn_overlay">① 다른 앱 위에 표시 허용</string>
+    <string name="btn_accessibility">② 접근성 설정 열기</string>
+    <string name="btn_show_pet">③ 펫 표시하기</string>
+
+    <string name="tab_basic">기본 설정</string>
+    <string name="tab_preset">프리셋</string>
+    <string name="tab_image">이미지</string>
+
+    <string name="label_size">크기</string>
+    <string name="size_small">소</string>
+    <string name="size_medium">중</string>
+    <string name="size_large">대</string>
+    <string name="size_xlarge">특대</string>
+
+    <string name="label_shake">흔들림 강도</string>
+    <string name="desc_shake">타이핑할 때 펫이 흔들리는 정도입니다. \"없음\"은 움직이지 않고 이미지만 바뀝니다.</string>
+    <string name="shake_none">없음</string>
+    <string name="shake_1">1단계</string>
+    <string name="shake_2">2단계</string>
+    <string name="shake_3">3단계</string>
+
+    <string name="label_display">표시</string>
+    <string name="switch_always_on_top_title">항상 위에 고정</string>
+    <string name="switch_always_on_top_desc">ON이면 다른 앱을 열 때마다 펫이 자동으로 나타납니다. OFF면 ③ 버튼을 눌렀을 때만 표시됩니다.</string>
+    <string name="switch_lock_title">위치 잠금(터치 통과)</string>
+    <string name="switch_lock_desc">ON으로 하면 터치가 아래 앱으로 그대로 전달되고, 드래그로 이동할 수 없습니다.</string>
+    <string name="btn_reset_pos">위치 초기화</string>
+
+    <string name="label_builtin_color">내장 색상</string>
+    <string name="desc_builtin_color">이미지 탭에서 이미지를 추가하지 않은 동안 여기서 선택한 색이 사용됩니다.</string>
+    <string name="label_selected">선택됨</string>
+    <string name="label_select">선택</string>
+
+    <string name="label_add_illust">내 이미지 추가(최대 4장)</string>
+    <string name="desc_add_illust">1장만 추가하면 항상 그 이미지가 표시되고, 여러 장이면 타이핑할 때마다 순서대로 바뀝니다. 모두 삭제하면 내장 색상으로 돌아갑니다.</string>
+    <string name="frame_label">칸 %1$d</string>
+    <string name="btn_add">추가</string>
+    <string name="btn_remove">삭제</string>
+
+    <string name="label_special">\"!\" \"?\" 전용 이미지(선택)</string>
+    <string name="desc_special">설정하면 !나 ?를 입력하는 순간에만 이 이미지로 바뀝니다(내용은 저장·전송하지 않고 그 순간에 기호가 포함되어 있는지만 확인합니다). 입력이 멈추면 잠시 후 자동으로 원래 모습으로 돌아갑니다. 설정하지 않으면 기존과 동일하게 동작합니다.</string>
+    <string name="label_exclaim">\"!\" 용</string>
+    <string name="label_question">\"?\" 용</string>
+</resources>
