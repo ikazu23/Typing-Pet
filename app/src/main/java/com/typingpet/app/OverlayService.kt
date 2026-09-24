@@ -2,7 +2,9 @@ package com.typingpet.app
 
 import android.app.Service
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
@@ -18,8 +20,14 @@ class OverlayService : Service() {
 
     companion object {
         var instance: OverlayService? = null
+
         fun reactIfRunning() {
             instance?.petView?.post { instance?.petView?.react() }
+        }
+
+        /** 設定画面での変更を、動作中のオーバーレイに即反映する */
+        fun refreshIfRunning() {
+            instance?.applyPrefs()
         }
     }
 
@@ -29,27 +37,78 @@ class OverlayService : Service() {
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         petView = PetView(this)
+        loadCustomFrames()
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         else
             @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
 
-        params = WindowManager.LayoutParams(
-            260, 260, type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT
-        )
-        params.gravity = Gravity.TOP or Gravity.START
-        params.x = 40
-        params.y = 200
+        val sizePx = dpToPx(Prefs.getSizeDp(this))
 
+        params = WindowManager.LayoutParams(sizePx, sizePx, type, baseFlags(), PixelFormat.TRANSLUCENT)
+        params.gravity = Gravity.TOP or Gravity.START
+        params.x = Prefs.getPosX(this)
+        params.y = Prefs.getPosY(this)
+
+        petView.preset = Prefs.getPreset(this)
+        petView.shakeLevel = Prefs.getShakeLevel(this)
+
+        setupTouch()
+
+        try {
+            windowManager.addView(petView, params)
+            added = true
+        } catch (e: Exception) {
+            // オーバーレイ権限が未許可の場合はここに来る
+        }
+    }
+
+    private fun baseFlags(): Int {
+        var flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        flags = if (Prefs.getPositionLocked(this)) {
+            flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        } else {
+            flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        }
+        return flags
+    }
+
+    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
+
+    private fun loadCustomFrames() {
+        val bitmaps = Prefs.getCustomFrames(this).mapNotNull { uriStr ->
+            try {
+                contentResolver.openInputStream(Uri.parse(uriStr))?.use { BitmapFactory.decodeStream(it) }
+            } catch (e: Exception) { null }
+        }
+        petView.customFrames = bitmaps
+    }
+
+    fun applyPrefs() {
+        if (!added) return
+        val sizePx = dpToPx(Prefs.getSizeDp(this))
+        params.width = sizePx
+        params.height = sizePx
+        params.flags = baseFlags()
+        params.x = Prefs.getPosX(this)
+        params.y = Prefs.getPosY(this)
+        windowManager.updateViewLayout(petView, params)
+
+        petView.preset = Prefs.getPreset(this)
+        petView.shakeLevel = Prefs.getShakeLevel(this)
+        loadCustomFrames()
+        petView.invalidate()
+    }
+
+    private fun setupTouch() {
         var startX = 0
         var startY = 0
         var touchX = 0f
         var touchY = 0f
 
         petView.setOnTouchListener { _, event ->
+            if (Prefs.getPositionLocked(this)) return@setOnTouchListener false
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     startX = params.x; startY = params.y
@@ -63,17 +122,12 @@ class OverlayService : Service() {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    petView.react(); true
+                    Prefs.setPos(this, params.x, params.y)
+                    petView.react()
+                    true
                 }
                 else -> false
             }
-        }
-
-        try {
-            windowManager.addView(petView, params)
-            added = true
-        } catch (e: Exception) {
-            // オーバーレイ権限が未許可の場合はここに来る
         }
     }
 

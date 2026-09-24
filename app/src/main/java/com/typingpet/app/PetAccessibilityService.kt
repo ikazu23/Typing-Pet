@@ -8,7 +8,7 @@ class PetAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        if (OverlayService.instance == null) {
+        if (OverlayService.instance == null && Prefs.getAlwaysOnTop(this)) {
             startService(Intent(this, OverlayService::class.java))
         }
     }
