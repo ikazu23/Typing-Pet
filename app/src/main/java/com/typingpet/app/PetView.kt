@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.animation.OvershootInterpolator
 
 /**
  * 打鍵のたびに表情(または画像)を切り替える丸っこいペット。
@@ -24,6 +25,7 @@ class PetView(context: Context) : View(context) {
 
     companion object {
         private const val IDLE_REVERT_DELAY_MS = 700L
+        private const val BOUNCE_DURATION_MS = 420L
     }
 
     var preset = 0
@@ -43,7 +45,12 @@ class PetView(context: Context) : View(context) {
 
     private var frame = 0
     private var activeSpecial: Bitmap? = null
+
+    // スクワッシュ&ストレッチ用(縦横逆方向に動かして、もちっとした弾力を出す)
+    private var scaleX = 1f
     private var scaleY = 1f
+    private var bounceAnimator: ValueAnimator? = null
+
     private var count = 0
 
     private val revertHandler = Handler(Looper.getMainLooper())
@@ -94,11 +101,32 @@ class PetView(context: Context) : View(context) {
         revertHandler.postDelayed(revertRunnable, IDLE_REVERT_DELAY_MS)
 
         if (shakeLevel <= 0) return
-        val dip = when (shakeLevel) { 1 -> 0.96f; 2 -> 0.92f; else -> 0.86f }
-        ValueAnimator.ofFloat(dip, 1f).apply {
-            duration = 160
-            addUpdateListener { scaleY = it.animatedValue as Float; invalidate() }
-        }.start()
+        playBounce()
+    }
+
+    /**
+     * 縦に潰れて横に伸び、その後オーバーシュートしながら元に戻る
+     * 「もちもち」した弾力アニメーション。
+     */
+    private fun playBounce() {
+        bounceAnimator?.cancel()
+
+        // squish: 縦の潰れ量(shakeLevelが大きいほど深く潰れる)
+        val squish = when (shakeLevel) { 1 -> 0.95f; 2 -> 0.90f; else -> 0.82f }
+        val stretch = 1f + (1f - squish) * 0.7f // 潰れた分だけ横に膨らむ
+        val overshootTension = when (shakeLevel) { 1 -> 1.4f; 2 -> 1.8f; else -> 2.4f }
+
+        bounceAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = BOUNCE_DURATION_MS
+            interpolator = OvershootInterpolator(overshootTension)
+            addUpdateListener {
+                val t = it.animatedValue as Float
+                scaleY = squish + (1f - squish) * t
+                scaleX = stretch + (1f - stretch) * t
+                invalidate()
+            }
+        }
+        bounceAnimator?.start()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -107,7 +135,7 @@ class PetView(context: Context) : View(context) {
         val cy = height / 2f
 
         canvas.save()
-        canvas.scale(1f, scaleY, cx, cy + height * 0.16f)
+        canvas.scale(scaleX, scaleY, cx, cy + height * 0.16f)
 
         val special = activeSpecial
         when {
