@@ -79,4 +79,6 @@
     <string name="copy_suffix">%1$sのコピー</string>
     <string name="confirm_delete_char">「%1$s」を削除しますか？</string>
     <string name="toast_last_char">最後の1体は削除できません</string>
+    <string name="switch_shadow_title">足元の影を表示</string>
+    <string name="switch_shadow_desc">ペットの足元に出る薄い影です。透過PNGのイラストで影が気になる場合はOFFにしてください。</string>
 </resources>
