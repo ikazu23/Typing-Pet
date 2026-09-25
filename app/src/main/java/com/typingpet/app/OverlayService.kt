@@ -46,6 +46,7 @@ class OverlayService : Service() {
         petView = PetView(this)
         petView.preset = Prefs.getPreset(this)
         petView.shakeLevel = Prefs.getShakeLevel(this)
+        petView.showShadow = Prefs.getShowShadow(this)
         loadImages()
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -117,6 +118,7 @@ class OverlayService : Service() {
 
         petView.preset = Prefs.getPreset(this)
         petView.shakeLevel = Prefs.getShakeLevel(this)
+        petView.showShadow = Prefs.getShowShadow(this)
         loadImages()
     }
 

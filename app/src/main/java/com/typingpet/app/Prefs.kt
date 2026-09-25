@@ -33,6 +33,10 @@ object Prefs {
     fun getPositionLocked(context: Context): Boolean = sp(context).getBoolean("positionLocked", false)
     fun setPositionLocked(context: Context, value: Boolean) = sp(context).edit().putBoolean("positionLocked", value).apply()
 
+    // 足元の影を表示するか
+    fun getShowShadow(context: Context): Boolean = sp(context).getBoolean("showShadow", true)
+    fun setShowShadow(context: Context, value: Boolean) = sp(context).edit().putBoolean("showShadow", value).apply()
+
     // 表示位置
     fun getPosX(context: Context): Int = sp(context).getInt("posX", 40)
     fun getPosY(context: Context): Int = sp(context).getInt("posY", 200)

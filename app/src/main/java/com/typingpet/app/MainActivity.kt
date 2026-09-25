@@ -237,6 +237,17 @@ class MainActivity : Activity() {
 
             addView(spacer(12))
 
+            addView(switchRow(
+                getString(R.string.switch_shadow_title),
+                getString(R.string.switch_shadow_desc),
+                Prefs.getShowShadow(this@MainActivity)
+            ) { checked ->
+                Prefs.setShowShadow(this@MainActivity, checked)
+                OverlayService.refreshIfRunning()
+            })
+
+            addView(spacer(12))
+
             addView(Button(this@MainActivity).apply {
                 text = getString(R.string.btn_reset_pos)
                 setOnClickListener {
