@@ -79,4 +79,6 @@
     <string name="copy_suffix">%1$s copy</string>
     <string name="confirm_delete_char">Delete \"%1$s\"?</string>
     <string name="toast_last_char">You can\'t delete the last character</string>
+    <string name="switch_shadow_title">Show shadow</string>
+    <string name="switch_shadow_desc">The faint shadow under the pet. Turn it off if it looks odd with your transparent images.</string>
 </resources>
