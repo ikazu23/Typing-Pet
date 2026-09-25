@@ -79,4 +79,6 @@
     <string name="copy_suffix">%1$s 복사본</string>
     <string name="confirm_delete_char">「%1$s」을(를) 삭제할까요?</string>
     <string name="toast_last_char">마지막 캐릭터는 삭제할 수 없습니다</string>
+    <string name="switch_shadow_title">발밑 그림자 표시</string>
+    <string name="switch_shadow_desc">펫 발밑에 생기는 옅은 그림자입니다. 투명 PNG 이미지에서 그림자가 신경 쓰이면 OFF로 해주세요.</string>
 </resources>
