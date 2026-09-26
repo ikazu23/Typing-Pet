@@ -68,10 +68,10 @@
     <string name="btn_cancel">취소</string>
     <string name="toast_keys_empty">문자를 1개 이상 입력하세요</string>
     <string name="label_chars">캐릭터</string>
-    <string name="desc_chars">이미지(대기·타이핑 중·문자로 전환)와 내장 색상을 캐릭터별로 저장하고 전환할 수 있습니다. 이미지 탭에서의 편집은 \"사용 중\"인 캐릭터에 반영됩니다.</string>
+    <string name="desc_chars">이미지(대기·타이핑 중·문자로 전환)와 내장 색상을 캐릭터별로 저장할 수 있습니다. 이미지 탭에서의 편집은 \"편집 중\"인 캐릭터에 반영됩니다.</string>
     <string name="char_default_name">캐릭터 %1$d</string>
-    <string name="label_in_use">(사용 중)</string>
-    <string name="btn_use">사용</string>
+    <string name="label_in_use">(편집 중)</string>
+    <string name="btn_use">편집</string>
     <string name="btn_rename">이름 변경</string>
     <string name="btn_add_char">+ 새 캐릭터(비어 있음)</string>
     <string name="btn_dup_char">+ 사용 중인 캐릭터 복제</string>
@@ -81,4 +81,7 @@
     <string name="toast_last_char">마지막 캐릭터는 삭제할 수 없습니다</string>
     <string name="switch_shadow_title">발밑 그림자 표시</string>
     <string name="switch_shadow_desc">펫 발밑에 생기는 옅은 그림자입니다. 투명 PNG 이미지에서 그림자가 신경 쓰이면 OFF로 해주세요.</string>
+    <string name="label_show_chars">표시할 캐릭터</string>
+    <string name="desc_show_chars">탭해서 표시／숨기기를 전환합니다. 표시 중인 캐릭터는 화면에서 각각 드래그해 옮길 수 있습니다.</string>
+    <string name="show_count">%1$d명 표시 중</string>
 </resources>
