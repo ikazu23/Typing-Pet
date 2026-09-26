@@ -84,4 +84,8 @@
     <string name="label_show_chars">표시할 캐릭터</string>
     <string name="desc_show_chars">탭해서 표시／숨기기를 전환합니다. 표시 중인 캐릭터는 화면에서 각각 드래그해 옮길 수 있습니다.</string>
     <string name="show_count">%1$d명 표시 중</string>
+    <string name="key_delete">⌫ 지울 때</string>
+    <string name="btn_add_delete_trigger">+ ⌫ 지울 때 반응 추가</string>
+    <string name="notif_channel">펫 표시</string>
+    <string name="notif_text">펫 표시 중</string>
 </resources>
