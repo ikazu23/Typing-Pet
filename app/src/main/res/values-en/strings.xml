@@ -90,4 +90,6 @@
     <string name="notif_text">Pet is on screen</string>
     <string name="pick_image_title">Choose an app</string>
     <string name="toast_import_failed">Some images couldn\'t be loaded</string>
+    <string name="perm_ok">✓ OK</string>
+    <string name="perm_set">Set up ›</string>
 </resources>
