@@ -48,7 +48,8 @@ class MainActivity : Activity() {
     private val ink = Color.parseColor("#1D1B19")        // 本文
     private val sub = Color.parseColor("#77716B")        // 補足
     private val bg = Color.parseColor("#F5F4F2")         // 画面の背景
-    private val accent = Color.parseColor("#E26A33")     // メインの色
+    private val accent = Color.parseColor("#D65A22")     // メインの色(塗り)
+    private val accentText = Color.parseColor("#A6461A") // オレンジの文字(白・薄い背景でも読めるよう濃いめ)
     private val accentSoft = Color.parseColor("#FCEEE7") // メインの色の薄い版
     private val cardBg = Color.WHITE
     private val line = Color.parseColor("#ECE9E5")       // 枠線
@@ -150,49 +151,34 @@ class MainActivity : Activity() {
             setBackgroundColor(bg)
         }
 
-        root.addView(TextView(this).apply {
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), 0, 0, dp(18))
+        }
+        titleRow.addView(TextView(this).apply {
             text = getString(R.string.title_settings)
             textSize = 24f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(ink)
-            setPadding(dp(4), 0, 0, dp(18))
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         })
+        titleRow.addView(Button(this).apply {
+            tag = "small"
+            text = "🌐 " + when (Prefs.getLanguage(this@MainActivity)) {
+                "ja" -> "日本語"; "en" -> "English"; "ko" -> "한국어"; else -> "Language"
+            }
+            setOnClickListener { showLanguageDialog(cancelable = true) }
+        })
+        root.addView(titleRow)
 
         showBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(showBox)
         root.addView(spacer(16))
 
-        root.addView(sectionCard {
-            addView(smallLabel(getString(R.string.section_permission)))
-            addView(spacer(8))
-            addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_overlay)
-                setOnClickListener {
-                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-                }
-            })
-            addView(spacer(8))
-            addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_accessibility)
-                setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-            })
-            addView(spacer(8))
-            addView(Button(this@MainActivity).apply {
-                tag = "primary"
-                text = getString(R.string.btn_show_pet)
-                setOnClickListener {
-                    if (Settings.canDrawOverlays(this@MainActivity)) {
-                        startService(Intent(this@MainActivity, OverlayService::class.java))
-                    }
-                }
-            })
-            addView(spacer(8))
-            addView(Button(this@MainActivity).apply {
-                text = "言語 / Language / 언어"
-                setOnClickListener { showLanguageDialog(cancelable = true) }
-            })
-        })
-
+        val perm = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        permBox = perm
+        root.addView(perm)
         root.addView(spacer(16))
 
         tabBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -214,6 +200,97 @@ class MainActivity : Activity() {
 
         renderAll()
         restyle(root)
+    }
+
+    // ---------- 権限(許可済みかどうかを1行ずつ表示) ----------
+
+    private var permBox: LinearLayout? = null
+
+    override fun onResume() {
+        super.onResume()
+        // 設定画面から戻ってきたら許可の状態を更新
+        if (permBox != null) renderPerm()
+    }
+
+    private fun renderPerm() {
+        val box = permBox ?: return
+        box.removeAllViews()
+        box.addView(sectionCard {
+            addView(smallLabel(getString(R.string.section_permission)))
+            addView(spacer(6))
+            addView(permRow(getString(R.string.btn_overlay), Settings.canDrawOverlays(this@MainActivity)) {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            })
+            addView(divider())
+            addView(permRow(getString(R.string.btn_accessibility), isAccessibilityEnabled()) {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            })
+            addView(spacer(12))
+            addView(Button(this@MainActivity).apply {
+                tag = "primary"
+                text = getString(R.string.btn_show_pet)
+                setOnClickListener {
+                    if (Settings.canDrawOverlays(this@MainActivity)) {
+                        startService(Intent(this@MainActivity, OverlayService::class.java))
+                    }
+                }
+            })
+        })
+        restyle(box)
+    }
+
+    /** 権限1つ分の行。許可済みなら緑の「✓ OK」、まだなら「設定する ›」 */
+    private fun permRow(label: String, ok: Boolean, onClick: () -> Unit): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(2), dp(12), dp(2), dp(12))
+            isClickable = true
+            background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#14000000")), null, rounded(Color.WHITE, 10))
+            setOnClickListener { onClick() }
+        }
+        row.addView(TextView(this).apply {
+            text = label
+            textSize = 15f
+            setTextColor(ink)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = dp(8)
+            }
+        })
+        row.addView(
+            if (ok) pill(getString(R.string.perm_ok), Color.parseColor("#2E7D4F"), Color.parseColor("#E6F4EC"))
+            else TextView(this).apply {
+                text = getString(R.string.perm_set)
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(accentText)
+            }
+        )
+        return row
+    }
+
+    private fun isAccessibilityEnabled(): Boolean {
+        val list = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+        return list.split(':').any {
+            it.startsWith("$packageName/", ignoreCase = true) && it.contains("PetAccessibilityService", ignoreCase = true)
+        }
+    }
+
+    /** 細い区切り線 */
+    private fun divider() = View(this).apply {
+        setBackgroundColor(line)
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
+    }
+
+    /** 1件分(キャラ・番号・文字の反応)をまとめる薄いグレーの箱 */
+    private fun itemBox(build: LinearLayout.() -> Unit): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = rounded(Color.parseColor("#F7F6F4"), 12)
+        setPadding(dp(12), dp(10), dp(12), dp(12))
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(10) }
+        build()
     }
 
     // ---------- 表示するキャラ(アイコンをタップで表示/非表示) ----------
@@ -241,7 +318,7 @@ class MainActivity : Activity() {
                 setPadding(dp(10), dp(3), dp(10), dp(3))
                 background = GradientDrawable().apply {
                     cornerRadius = dp(12).toFloat()
-                    setColor(if (shown.isEmpty()) sub else accent)
+                    setColor(if (shown.isEmpty()) sub else accentText)
                 }
             })
             addView(head)
@@ -349,6 +426,7 @@ class MainActivity : Activity() {
 
     private fun renderAll() {
         renderShowBar()
+        renderPerm()
         renderTabs()
         renderBasic()
         renderPreset()
@@ -425,9 +503,7 @@ class MainActivity : Activity() {
             ) { checked ->
                 Prefs.setAlwaysOnTop(this@MainActivity, checked)
             })
-
-            addView(spacer(12))
-
+            addView(divider())
             addView(switchRow(
                 getString(R.string.switch_lock_title),
                 getString(R.string.switch_lock_desc),
@@ -436,9 +512,7 @@ class MainActivity : Activity() {
                 Prefs.setPositionLocked(this@MainActivity, checked)
                 OverlayService.refreshIfRunning()
             })
-
-            addView(spacer(12))
-
+            addView(divider())
             addView(switchRow(
                 getString(R.string.switch_shadow_title),
                 getString(R.string.switch_shadow_desc),
@@ -516,7 +590,7 @@ class MainActivity : Activity() {
                     text = if (i == current) getString(R.string.label_selected) else getString(R.string.label_select)
                     textSize = 12f
                     setPadding(0, dp(4), 0, 0)
-                    setTextColor(if (i == current) accent else sub)
+                    setTextColor(if (i == current) accentText else sub)
                     gravity = Gravity.CENTER
                 })
                 row.addView(cell)
@@ -545,66 +619,73 @@ class MainActivity : Activity() {
 
         names.forEachIndexed { i, name ->
             val isActive = i == active
-            val nameRow = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(4), 0, dp(6))
-            }
-            nameRow.addView(TextView(this@MainActivity).apply {
-                text = name
-                textSize = 15f
-                if (isActive) typeface = Typeface.DEFAULT_BOLD
-                setTextColor(ink)
-            })
-            if (isActive) {
-                nameRow.addView(pill(getString(R.string.label_in_use).trim('(', ')', '（', '）'), accent, accentSoft).apply {
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                    ).apply { marginStart = dp(8) }
-                })
-            }
-            addView(nameRow)
-
-            val buttons = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
-            if (!isActive) {
-                buttons.addView(Button(this@MainActivity).apply {
-                    text = getString(R.string.btn_use)
-                    setOnClickListener {
-                        Prefs.switchCharacter(this@MainActivity, i)
-                        charactersChanged()
-                    }
-                })
-            }
-            buttons.addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_rename)
-                setOnClickListener {
-                    showTextDialog(getString(R.string.dialog_char_name_title), name, "") { newName ->
-                        Prefs.renameCharacter(this@MainActivity, i, newName)
-                        renderPreset()
-                        renderShowBar()
-                    }
+            addView(itemBox {
+                val nameRow = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
                 }
-            })
-            buttons.addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_remove)
-                setOnClickListener {
-                    if (names.size <= 1) {
-                        Toast.makeText(this@MainActivity, getString(R.string.toast_last_char), Toast.LENGTH_SHORT).show()
-                        return@setOnClickListener
-                    }
-                    AlertDialog.Builder(this@MainActivity)
-                        .setMessage(getString(R.string.confirm_delete_char, name))
-                        .setPositiveButton(getString(R.string.btn_remove)) { _, _ ->
-                            Prefs.deleteCharacter(this@MainActivity, i)
+                nameRow.addView(TextView(this@MainActivity).apply {
+                    text = name
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(ink)
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                })
+                if (isActive) {
+                    nameRow.addView(pill(getString(R.string.label_in_use).trim('(', ')', '（', '）'), accentText, accentSoft).apply {
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply { marginStart = dp(8) }
+                    })
+                }
+                addView(nameRow)
+                addView(spacer(8))
+
+                val chips = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
+                if (!isActive) {
+                    chips.addView(Button(this@MainActivity).apply {
+                        tag = "small"
+                        text = getString(R.string.btn_use)
+                        setOnClickListener {
+                            Prefs.switchCharacter(this@MainActivity, i)
                             charactersChanged()
                         }
-                        .setNegativeButton(getString(R.string.btn_cancel), null)
-                        .show()
+                    })
                 }
+                chips.addView(Button(this@MainActivity).apply {
+                    tag = "small"
+                    text = getString(R.string.btn_rename)
+                    setOnClickListener {
+                        showTextDialog(getString(R.string.dialog_char_name_title), name, "") { newName ->
+                            Prefs.renameCharacter(this@MainActivity, i, newName)
+                            renderPreset()
+                            renderShowBar()
+                        }
+                    }
+                })
+                chips.addView(Button(this@MainActivity).apply {
+                    tag = "small"
+                    text = getString(R.string.btn_remove)
+                    setOnClickListener {
+                        if (names.size <= 1) {
+                            Toast.makeText(this@MainActivity, getString(R.string.toast_last_char), Toast.LENGTH_SHORT).show()
+                            return@setOnClickListener
+                        }
+                        AlertDialog.Builder(this@MainActivity)
+                            .setMessage(getString(R.string.confirm_delete_char, name))
+                            .setPositiveButton(getString(R.string.btn_remove)) { _, _ ->
+                                Prefs.deleteCharacter(this@MainActivity, i)
+                                charactersChanged()
+                            }
+                            .setNegativeButton(getString(R.string.btn_cancel), null)
+                            .show()
+                    }
+                })
+                addView(chips)
             })
-            addView(buttons)
-            addView(spacer(10))
         }
+        addView(spacer(4))
 
         addView(Button(this@MainActivity).apply {
             text = getString(R.string.btn_add_char)
@@ -618,6 +699,7 @@ class MainActivity : Activity() {
                 }
             }
         })
+        addView(spacer(8))
         addView(Button(this@MainActivity).apply {
             text = getString(R.string.btn_dup_char)
             setOnClickListener {
@@ -727,42 +809,46 @@ class MainActivity : Activity() {
         }
 
         steps.forEachIndexed { si, variants ->
-            val header = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            header.addView(TextView(this@MainActivity).apply {
-                text = getString(R.string.step_label, si + 1)
-                textSize = 14f
-                setTextColor(ink)
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            header.addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_delete_step)
-                setOnClickListener {
+            addView(itemBox {
+                val header = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                header.addView(TextView(this@MainActivity).apply {
+                    text = getString(R.string.step_label, si + 1)
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(ink)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                })
+                header.addView(Button(this@MainActivity).apply {
+                    tag = "small"
+                    text = getString(R.string.btn_delete_step)
+                    setOnClickListener {
+                        val s = Prefs.getTypingSteps(this@MainActivity)
+                        if (si in s.indices) s.removeAt(si)
+                        Prefs.setTypingSteps(this@MainActivity, s)
+                        imagesChanged()
+                    }
+                })
+                addView(header)
+                addView(spacer(8))
+
+                addView(thumbStrip(variants) { i ->
                     val s = Prefs.getTypingSteps(this@MainActivity)
-                    if (si in s.indices) s.removeAt(si)
+                    if (si in s.indices && i in s[si].indices) s[si].removeAt(i)
                     Prefs.setTypingSteps(this@MainActivity, s)
                     imagesChanged()
-                }
-            })
-            addView(header)
-            addView(spacer(6))
+                })
 
-            addView(thumbStrip(variants) { i ->
-                val s = Prefs.getTypingSteps(this@MainActivity)
-                if (si in s.indices && i in s[si].indices) s[si].removeAt(i)
-                Prefs.setTypingSteps(this@MainActivity, s)
-                imagesChanged()
+                addView(spacer(8))
+                addView(Button(this@MainActivity).apply {
+                    text = getString(R.string.btn_add_variant)
+                    setOnClickListener { pickImages(CAT_STEP, si) }
+                })
             })
-
-            addView(spacer(6))
-            addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_add_variant)
-                setOnClickListener { pickImages(CAT_STEP, si) }
-            })
-            addView(spacer(16))
         }
+        addView(spacer(4))
 
         addView(Button(this@MainActivity).apply {
             text = getString(R.string.btn_add_step)
@@ -783,50 +869,58 @@ class MainActivity : Activity() {
         }
 
         triggers.forEachIndexed { ti, t ->
-            addView(TextView(this@MainActivity).apply {
-                text = getString(R.string.trigger_keys_label, formatKeys(t.keys))
-                textSize = 14f
-                setTextColor(ink)
-            })
-
-            val buttons = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
-            if (Prefs.DELETE_KEY !in t.keys) buttons.addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_edit_keys)
-                setOnClickListener {
-                    showKeysDialog(t.keys) { keys ->
+            addView(itemBox {
+                val header = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                header.addView(TextView(this@MainActivity).apply {
+                    text = formatKeys(t.keys)
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(ink)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                })
+                if (Prefs.DELETE_KEY !in t.keys) header.addView(Button(this@MainActivity).apply {
+                    tag = "small"
+                    text = getString(R.string.btn_edit_keys)
+                    setOnClickListener {
+                        showKeysDialog(t.keys) { keys ->
+                            val all = Prefs.getTriggers(this@MainActivity)
+                            if (ti in all.indices) all[ti].keys = keys
+                            Prefs.setTriggers(this@MainActivity, all)
+                            imagesChanged()
+                        }
+                    }
+                })
+                header.addView(Button(this@MainActivity).apply {
+                    tag = "small"
+                    text = getString(R.string.btn_remove)
+                    setOnClickListener {
                         val all = Prefs.getTriggers(this@MainActivity)
-                        if (ti in all.indices) all[ti].keys = keys
+                        if (ti in all.indices) all.removeAt(ti)
                         Prefs.setTriggers(this@MainActivity, all)
                         imagesChanged()
                     }
-                }
-            })
-            buttons.addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_remove)
-                setOnClickListener {
+                })
+                addView(header)
+                addView(spacer(8))
+
+                addView(thumbStrip(t.images) { i ->
                     val all = Prefs.getTriggers(this@MainActivity)
-                    if (ti in all.indices) all.removeAt(ti)
+                    if (ti in all.indices && i in all[ti].images.indices) all[ti].images.removeAt(i)
                     Prefs.setTriggers(this@MainActivity, all)
                     imagesChanged()
-                }
-            })
-            addView(buttons)
-            addView(spacer(6))
+                })
 
-            addView(thumbStrip(t.images) { i ->
-                val all = Prefs.getTriggers(this@MainActivity)
-                if (ti in all.indices && i in all[ti].images.indices) all[ti].images.removeAt(i)
-                Prefs.setTriggers(this@MainActivity, all)
-                imagesChanged()
+                addView(spacer(8))
+                addView(Button(this@MainActivity).apply {
+                    text = getString(R.string.btn_add_image)
+                    setOnClickListener { pickImages(CAT_TRIGGER, ti) }
+                })
             })
-
-            addView(spacer(6))
-            addView(Button(this@MainActivity).apply {
-                text = getString(R.string.btn_add_image)
-                setOnClickListener { pickImages(CAT_TRIGGER, ti) }
-            })
-            addView(spacer(16))
         }
+        addView(spacer(4))
 
         addView(Button(this@MainActivity).apply {
             text = getString(R.string.btn_add_trigger)
@@ -898,26 +992,38 @@ class MainActivity : Activity() {
 
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         uris.forEachIndexed { i, uri ->
-            val cell = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(0, 0, dp(8), 0)
+            val cell = FrameLayout(this).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(78), dp(78)).apply { marginEnd = dp(6) }
             }
             cell.addView(ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(72), dp(72))
+                layoutParams = FrameLayout.LayoutParams(dp(72), dp(72), Gravity.BOTTOM or Gravity.START)
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                background = rounded(tonal, 14)
+                background = rounded(Color.parseColor("#ECE9E5"), 12)
                 clipToOutline = true
                 thumbFor(uri)?.let { setImageBitmap(it) }
             })
-            cell.addView(Button(this).apply {
-                tag = "small"
-                text = getString(R.string.btn_remove)
+            // 右上の × で削除
+            cell.addView(TextView(this).apply {
+                text = "×"
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.parseColor("#CC1D1B19"))
+                    setStroke(dp(2), Color.WHITE)
+                }
+                layoutParams = FrameLayout.LayoutParams(dp(24), dp(24), Gravity.TOP or Gravity.END)
+                isClickable = true
                 setOnClickListener { onRemove(i) }
             })
             row.addView(cell)
         }
-        return HorizontalScrollView(this).apply { addView(row) }
+        return HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(row)
+        }
     }
 
     private fun thumbFor(uri: String): Bitmap? {
@@ -1051,12 +1157,20 @@ class MainActivity : Activity() {
         setTextColor(ink)
     }
 
+    /** 説明文。長いものは2行で「…」にして、タップで全文を開閉 */
     private fun descLabel(text: String) = TextView(this).apply {
         this.text = text
         textSize = 13f
         setTextColor(sub)
         setLineSpacing(0f, 1.25f)
         setPadding(0, dp(4), 0, 0)
+        maxLines = 2
+        ellipsize = TextUtils.TruncateAt.END
+        setOnClickListener {
+            val open = maxLines == 2
+            maxLines = if (open) Int.MAX_VALUE else 2
+            ellipsize = if (open) null else TextUtils.TruncateAt.END
+        }
     }
 
     private fun spacer(h: Int) = View(this).apply {
@@ -1105,7 +1219,7 @@ class MainActivity : Activity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(6), 0, dp(6))
+            setPadding(0, dp(12), 0, dp(12))
         }
         val textCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1114,17 +1228,13 @@ class MainActivity : Activity() {
             }
         }
         textCol.addView(TextView(this).apply { text = title; setTextColor(ink); textSize = 15f })
-        textCol.addView(TextView(this).apply {
-            text = desc; setTextColor(sub); textSize = 13f
-            setLineSpacing(0f, 1.2f)
-            setPadding(0, dp(2), 0, 0)
-        })
+        textCol.addView(descLabel(desc).apply { setPadding(0, dp(2), 0, 0) })
         row.addView(textCol)
         val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
         row.addView(Switch(this).apply {
             isChecked = checked
-            thumbTintList = ColorStateList(states, intArrayOf(accent, Color.WHITE))
-            trackTintList = ColorStateList(states, intArrayOf(Color.parseColor("#F2B495"), Color.parseColor("#D6D2CD")))
+            thumbTintList = ColorStateList(states, intArrayOf(accent, Color.parseColor("#FAFAFA")))
+            trackTintList = ColorStateList(states, intArrayOf(Color.parseColor("#EFA37E"), Color.parseColor("#B9B2AA")))
             setOnCheckedChangeListener { _, isChecked -> onChange(isChecked) }
         })
         return row
@@ -1140,16 +1250,21 @@ class MainActivity : Activity() {
             for (i in 0 until v.childCount) restyle(v.getChildAt(i))
             return
         }
-        if (v !is Button) return
+        if (v !is Button || v is Switch) return
 
         val label = v.text.toString()
         val removeWords = setOf(getString(R.string.btn_remove), getString(R.string.btn_delete_step))
         val small = v.tag == "small"
-        val (fg, bgColor) = when {
-            v.tag == "primary" -> Color.WHITE to accent
-            label in removeWords -> danger to dangerSoft
-            label.startsWith("＋") || label.startsWith("+") -> accent to accentSoft
-            else -> ink to tonal
+        val isRemove = label in removeWords
+        val isAdd = label.startsWith("＋") || label.startsWith("+")
+
+        // 文字色 / 塗り / 枠線
+        val fg: Int; val fill: Int; val stroke: Int?
+        when {
+            v.tag == "primary" -> { fg = Color.WHITE; fill = accent; stroke = null }             // 一番大事なボタン: オレンジ塗り
+            isRemove -> { fg = danger; fill = Color.WHITE; stroke = Color.parseColor("#F0C9C6") } // 削除: 赤文字
+            isAdd -> { fg = accentText; fill = Color.WHITE; stroke = Color.parseColor("#E9B69C") } // 追加: オレンジの枠
+            else -> { fg = ink; fill = Color.WHITE; stroke = Color.parseColor("#D9D4CE") }        // 普通: グレーの枠
         }
 
         v.isAllCaps = false
@@ -1158,24 +1273,26 @@ class MainActivity : Activity() {
         v.minHeight = 0; v.minimumHeight = 0
         v.minWidth = 0; v.minimumWidth = 0
         v.setTextColor(fg)
-        v.textSize = if (small) 12f else 15f
-        if (v.tag == "primary" || bgColor == accentSoft) v.typeface = Typeface.DEFAULT_BOLD
-        if (small) v.setPadding(dp(12), dp(6), dp(12), dp(6)) else v.setPadding(dp(16), dp(13), dp(16), dp(13))
+        v.textSize = if (small) 13f else 15f
+        v.typeface = if (v.tag == "primary" || isAdd) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+        if (small) v.setPadding(dp(12), dp(7), dp(12), dp(7)) else v.setPadding(dp(16), dp(13), dp(16), dp(13))
         v.background = RippleDrawable(
             ColorStateList.valueOf(Color.parseColor("#1F000000")),
-            rounded(bgColor, if (small) 10 else 12),
+            GradientDrawable().apply {
+                setColor(fill)
+                cornerRadius = dp(if (small) 18 else 12).toFloat()
+                if (stroke != null) setStroke(dp(1), stroke)
+            },
             null
         )
 
-        // 横並びのボタン同士にすき間、縦並びは上下にすき間
+        // 横並びのボタン同士にすき間
         val lp = v.layoutParams as? LinearLayout.LayoutParams ?: return
         val parent = v.parent as? LinearLayout ?: return
         if (parent.orientation == LinearLayout.HORIZONTAL) {
-            lp.marginEnd = dp(8)
-        } else if (small) {
-            lp.topMargin = dp(6)
+            lp.marginStart = dp(6)
+            v.layoutParams = lp
         }
-        v.layoutParams = lp
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
