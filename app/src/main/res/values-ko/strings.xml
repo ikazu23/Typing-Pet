@@ -88,4 +88,6 @@
     <string name="btn_add_delete_trigger">+ ⌫ 지울 때 반응 추가</string>
     <string name="notif_channel">펫 표시</string>
     <string name="notif_text">펫 표시 중</string>
+    <string name="pick_image_title">이미지를 고를 앱</string>
+    <string name="toast_import_failed">불러오지 못한 이미지가 있습니다</string>
 </resources>
