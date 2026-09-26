@@ -6,9 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -40,11 +42,17 @@ class MainActivity : Activity() {
     private lateinit var imageBox: LinearLayout
     private lateinit var showBox: LinearLayout
 
-    private val ink = Color.parseColor("#3A2E2C")
-    private val sub = Color.parseColor("#8A7A72")
-    private val bg = Color.parseColor("#FDF6EC")
-    private val accent = Color.parseColor("#FF9D6C")
+    // ---- 配色(シンプルなアプリ風。角丸だけ効かせる) ----
+    private val ink = Color.parseColor("#1D1B19")        // 本文
+    private val sub = Color.parseColor("#77716B")        // 補足
+    private val bg = Color.parseColor("#F5F4F2")         // 画面の背景
+    private val accent = Color.parseColor("#E26A33")     // メインの色
+    private val accentSoft = Color.parseColor("#FCEEE7") // メインの色の薄い版
     private val cardBg = Color.WHITE
+    private val line = Color.parseColor("#ECE9E5")       // 枠線
+    private val tonal = Color.parseColor("#F2F0ED")      // 普通のボタン
+    private val danger = Color.parseColor("#C94040")     // 削除
+    private val dangerSoft = Color.parseColor("#FBEDEC")
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleHelper.wrap(newBase))
@@ -52,6 +60,15 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+        // ステータスバー・ナビバーのアイコンを黒に(明るい背景に合わせる)
+        var flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        }
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = flags
 
         // 初回起動時は言語を選ぶまで設定画面を組み立てない(選択後にrecreateされる)
         if (!Prefs.hasChosenLanguage(this)) {
@@ -78,16 +95,16 @@ class MainActivity : Activity() {
     private fun buildUi() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(48), dp(24), dp(24))
+            setPadding(dp(16), dp(28), dp(16), dp(32))
             setBackgroundColor(bg)
         }
 
         root.addView(TextView(this).apply {
             text = getString(R.string.title_settings)
-            textSize = 20f
+            textSize = 24f
+            typeface = Typeface.DEFAULT_BOLD
             setTextColor(ink)
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(16))
+            setPadding(dp(4), 0, 0, dp(18))
         })
 
         showBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -110,6 +127,7 @@ class MainActivity : Activity() {
             })
             addView(spacer(8))
             addView(Button(this@MainActivity).apply {
+                tag = "primary"
                 text = getString(R.string.btn_show_pet)
                 setOnClickListener {
                     if (Settings.canDrawOverlays(this@MainActivity)) {
@@ -126,7 +144,7 @@ class MainActivity : Activity() {
 
         root.addView(spacer(16))
 
-        tabBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        tabBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(tabBar)
         root.addView(spacer(12))
 
@@ -137,10 +155,14 @@ class MainActivity : Activity() {
         root.addView(presetBox)
         root.addView(imageBox)
 
-        val scroll = ScrollView(this).apply { addView(root) }
+        val scroll = ScrollView(this).apply {
+            setBackgroundColor(bg)
+            addView(root)
+        }
         setContentView(scroll)
 
         renderAll()
+        restyle(root)
     }
 
     // ---------- 表示するキャラ(アイコンをタップで表示/非表示) ----------
@@ -182,6 +204,7 @@ class MainActivity : Activity() {
                 addView(row)
             })
         })
+        restyle(showBox)
     }
 
     /** まるいアイコン＋名前のボタン。表示中はオレンジの輪とチェック、非表示は薄く */
@@ -286,22 +309,12 @@ class MainActivity : Activity() {
 
     private fun renderTabs() {
         tabBar.removeAllViews()
-        listOf(
+        val labels = listOf(
             getString(R.string.tab_basic),
             getString(R.string.tab_preset),
             getString(R.string.tab_image)
-        ).forEachIndexed { i, label ->
-            tabBar.addView(Button(this).apply {
-                text = label
-                val selected = currentTab == i
-                setBackgroundColor(if (selected) ink else cardBg)
-                setTextColor(if (selected) Color.WHITE else ink)
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginEnd = dp(6)
-                }
-                setOnClickListener { currentTab = i; renderAll() }
-            })
-        }
+        )
+        tabBar.addView(segmented(labels, currentTab) { i -> currentTab = i; renderAll() })
     }
 
     // ---------- 基本設定タブ ----------
@@ -412,6 +425,7 @@ class MainActivity : Activity() {
                 }
             })
         })
+        restyle(basicBox)
     }
 
     // ---------- プリセットタブ ----------
@@ -434,7 +448,12 @@ class MainActivity : Activity() {
                 val cell = LinearLayout(this@MainActivity).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    setPadding(0, dp(8), 0, dp(8))
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginEnd = if (i < 3) dp(6) else 0
+                    }
+                    background = rounded(if (i == current) accentSoft else Color.TRANSPARENT, 14,
+                        if (i == current) accent else line)
                 }
                 val preview = PetView(this@MainActivity).apply {
                     preset = i
@@ -449,6 +468,7 @@ class MainActivity : Activity() {
                 cell.addView(TextView(this@MainActivity).apply {
                     text = if (i == current) getString(R.string.label_selected) else getString(R.string.label_select)
                     textSize = 12f
+                    setPadding(0, dp(4), 0, 0)
                     setTextColor(if (i == current) accent else sub)
                     gravity = Gravity.CENTER
                 })
@@ -456,6 +476,7 @@ class MainActivity : Activity() {
             }
             addView(row)
         })
+        restyle(presetBox)
     }
 
     // ---------- キャラ(イラスト一式を保存して切り替え) ----------
@@ -477,11 +498,25 @@ class MainActivity : Activity() {
 
         names.forEachIndexed { i, name ->
             val isActive = i == active
-            addView(TextView(this@MainActivity).apply {
-                text = if (isActive) "$name  ${getString(R.string.label_in_use)}" else name
+            val nameRow = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(4), 0, dp(6))
+            }
+            nameRow.addView(TextView(this@MainActivity).apply {
+                text = name
                 textSize = 15f
-                setTextColor(if (isActive) accent else ink)
+                if (isActive) typeface = Typeface.DEFAULT_BOLD
+                setTextColor(ink)
             })
+            if (isActive) {
+                nameRow.addView(pill(getString(R.string.label_in_use).trim('(', ')', '（', '）'), accent, accentSoft).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { marginStart = dp(8) }
+                })
+            }
+            addView(nameRow)
 
             val buttons = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
             if (!isActive) {
@@ -609,6 +644,7 @@ class MainActivity : Activity() {
         imageBox.addView(stepsCard())
         imageBox.addView(spacer(16))
         imageBox.addView(triggersCard())
+        restyle(imageBox)
     }
 
     /** 待機イラスト(ランダム表示) */
@@ -804,14 +840,15 @@ class MainActivity : Activity() {
                 setPadding(0, 0, dp(8), 0)
             }
             cell.addView(ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(64), dp(64))
+                layoutParams = LinearLayout.LayoutParams(dp(72), dp(72))
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                setBackgroundColor(Color.parseColor("#EEE0D3"))
+                background = rounded(tonal, 14)
+                clipToOutline = true
                 thumbFor(uri)?.let { setImageBitmap(it) }
             })
             cell.addView(Button(this).apply {
+                tag = "small"
                 text = getString(R.string.btn_remove)
-                textSize = 11f
                 setOnClickListener { onRemove(i) }
             })
             row.addView(cell)
@@ -921,25 +958,45 @@ class MainActivity : Activity() {
 
     // ---------- 共通UI部品 ----------
 
+    /** 角丸の背景(stroke を渡すと細い枠線つき) */
+    private fun rounded(color: Int, radiusDp: Int, stroke: Int? = null): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radiusDp).toFloat()
+            if (stroke != null) setStroke(dp(1), stroke)
+        }
+
+    /** 小さいラベル(「編集中」など) */
+    private fun pill(text: String, fg: Int, bgColor: Int) = TextView(this).apply {
+        this.text = text
+        textSize = 11f
+        typeface = Typeface.DEFAULT_BOLD
+        setTextColor(fg)
+        setPadding(dp(8), dp(2), dp(8), dp(2))
+        background = rounded(bgColor, 10)
+    }
+
     private fun sectionCard(build: LinearLayout.() -> Unit): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(cardBg)
-            setPadding(dp(16), dp(16), dp(16), dp(16))
+            background = rounded(cardBg, 16, line)
+            setPadding(dp(18), dp(18), dp(18), dp(18))
             build()
         }
     }
 
     private fun smallLabel(text: String) = TextView(this).apply {
         this.text = text
-        textSize = 15f
+        textSize = 16f
+        typeface = Typeface.DEFAULT_BOLD
         setTextColor(ink)
     }
 
     private fun descLabel(text: String) = TextView(this).apply {
         this.text = text
-        textSize = 12f
+        textSize = 13f
         setTextColor(sub)
+        setLineSpacing(0f, 1.25f)
         setPadding(0, dp(4), 0, 0)
     }
 
@@ -947,38 +1004,119 @@ class MainActivity : Activity() {
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(h))
     }
 
-    /** ラベルと値のペアから選択式のボタン列を作る */
-    private fun segRow(options: List<Pair<String, String>>, selectedValue: String, onSelect: (String) -> Unit): LinearLayout {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        options.forEach { (label, value) ->
-            val selected = value == selectedValue
-            row.addView(Button(this).apply {
+    /** iOS/Androidでよくある「選択肢を横に並べた切り替え」 */
+    private fun segmented(labels: List<String>, selected: Int, onSelect: (Int) -> Unit): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(3), dp(3), dp(3), dp(3))
+            background = rounded(Color.parseColor("#EAE7E3"), 12)
+        }
+        labels.forEachIndexed { i, label ->
+            val on = i == selected
+            row.addView(TextView(this).apply {
                 text = label
-                setBackgroundColor(if (selected) accent else Color.parseColor("#F3EAE0"))
-                setTextColor(if (selected) Color.WHITE else ink)
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginEnd = dp(4)
+                textSize = 14f
+                gravity = Gravity.CENTER
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+                setPadding(dp(6), dp(9), dp(6), dp(9))
+                setTextColor(if (on) ink else sub)
+                if (on) {
+                    typeface = Typeface.DEFAULT_BOLD
+                    background = rounded(cardBg, 10)
+                    elevation = dp(1).toFloat()
+                } else {
+                    background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#14000000")), null, rounded(Color.WHITE, 10))
                 }
-                setOnClickListener { onSelect(value) }
+                isClickable = true
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setOnClickListener { if (!on) onSelect(i) }
             })
         }
         return row
     }
 
+    /** ラベルと値のペアから選択式の切り替えを作る */
+    private fun segRow(options: List<Pair<String, String>>, selectedValue: String, onSelect: (String) -> Unit): LinearLayout =
+        segmented(options.map { it.first }, options.indexOfFirst { it.second == selectedValue }) { i ->
+            onSelect(options[i].second)
+        }
+
     private fun switchRow(title: String, desc: String, checked: Boolean, onChange: (Boolean) -> Unit): LinearLayout {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, dp(6))
+        }
         val textCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = dp(12)
+            }
         }
         textCol.addView(TextView(this).apply { text = title; setTextColor(ink); textSize = 15f })
-        textCol.addView(TextView(this).apply { text = desc; setTextColor(sub); textSize = 12f })
+        textCol.addView(TextView(this).apply {
+            text = desc; setTextColor(sub); textSize = 13f
+            setLineSpacing(0f, 1.2f)
+            setPadding(0, dp(2), 0, 0)
+        })
         row.addView(textCol)
+        val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
         row.addView(Switch(this).apply {
             isChecked = checked
+            thumbTintList = ColorStateList(states, intArrayOf(accent, Color.WHITE))
+            trackTintList = ColorStateList(states, intArrayOf(Color.parseColor("#F2B495"), Color.parseColor("#D6D2CD")))
             setOnCheckedChangeListener { _, isChecked -> onChange(isChecked) }
         })
         return row
+    }
+
+    /**
+     * 画面内のボタンをまとめて同じデザインにする。
+     * tag="primary" … メインの塗りボタン / tag="small" … 小さい削除ボタン
+     * 「削除」系 … 赤文字 / 「＋」で始まる … 追加ボタン(薄いオレンジ) / それ以外 … グレーの普通ボタン
+     */
+    private fun restyle(v: View) {
+        if (v is ViewGroup) {
+            for (i in 0 until v.childCount) restyle(v.getChildAt(i))
+            return
+        }
+        if (v !is Button) return
+
+        val label = v.text.toString()
+        val removeWords = setOf(getString(R.string.btn_remove), getString(R.string.btn_delete_step))
+        val small = v.tag == "small"
+        val (fg, bgColor) = when {
+            v.tag == "primary" -> Color.WHITE to accent
+            label in removeWords -> danger to dangerSoft
+            label.startsWith("＋") || label.startsWith("+") -> accent to accentSoft
+            else -> ink to tonal
+        }
+
+        v.isAllCaps = false
+        v.stateListAnimator = null
+        v.elevation = 0f
+        v.minHeight = 0; v.minimumHeight = 0
+        v.minWidth = 0; v.minimumWidth = 0
+        v.setTextColor(fg)
+        v.textSize = if (small) 12f else 15f
+        if (v.tag == "primary" || bgColor == accentSoft) v.typeface = Typeface.DEFAULT_BOLD
+        if (small) v.setPadding(dp(12), dp(6), dp(12), dp(6)) else v.setPadding(dp(16), dp(13), dp(16), dp(13))
+        v.background = RippleDrawable(
+            ColorStateList.valueOf(Color.parseColor("#1F000000")),
+            rounded(bgColor, if (small) 10 else 12),
+            null
+        )
+
+        // 横並びのボタン同士にすき間、縦並びは上下にすき間
+        val lp = v.layoutParams as? LinearLayout.LayoutParams ?: return
+        val parent = v.parent as? LinearLayout ?: return
+        if (parent.orientation == LinearLayout.HORIZONTAL) {
+            lp.marginEnd = dp(8)
+        } else if (small) {
+            lp.topMargin = dp(6)
+        }
+        v.layoutParams = lp
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
