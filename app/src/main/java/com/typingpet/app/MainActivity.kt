@@ -29,6 +29,8 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.pm.ShortcutInfoCompat
+import java.io.File
+import java.util.UUID
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 
@@ -92,7 +94,56 @@ class MainActivity : Activity() {
             .show()
     }
 
+    /**
+     * 画像を選ぶ画面を開く。Googleフォト・ギャラリー・ファイルなど、
+     * 画像を選べるアプリの中から好きなものを選べる。
+     */
+    private fun imagePickerIntent(multiple: Boolean): Intent {
+        val get = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "image/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            if (multiple) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        return Intent.createChooser(get, getString(R.string.pick_image_title))
+    }
+
+    /** 選んだ画像をアプリ内(images フォルダ)にコピーして、その場所を返す。失敗したら null */
+    private fun importImage(uri: Uri): String? {
+        return try {
+            val dir = File(filesDir, "images").apply { mkdirs() }
+            val file = File(dir, UUID.randomUUID().toString())
+            val input = contentResolver.openInputStream(uri) ?: return null
+            input.use { inp -> file.outputStream().use { out -> inp.copyTo(out) } }
+            if (file.length() == 0L) {
+                file.delete()
+                null
+            } else {
+                Uri.fromFile(file).toString()
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** どのキャラにも使われていないコピー画像を消す(容量を食わないように) */
+    private fun cleanupImages() {
+        try {
+            val dir = File(filesDir, "images")
+            if (!dir.exists()) return
+            val chars = Prefs.getCharacters(this)
+            if (chars.isEmpty()) return // 読み込みに失敗したときは何も消さない
+            val used = HashSet<String>()
+            chars.forEach { c ->
+                used.addAll(c.idle)
+                c.steps.forEach { used.addAll(it) }
+                c.triggers.forEach { used.addAll(it.images) }
+            }
+            dir.listFiles()?.forEach { f -> if (Uri.fromFile(f).toString() !in used) f.delete() }
+        } catch (e: Exception) { /* 掃除できなくても動作には影響しない */ }
+    }
+
     private fun buildUi() {
+        cleanupImages()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(28), dp(16), dp(32))
@@ -417,11 +468,7 @@ class MainActivity : Activity() {
             addView(Button(this@MainActivity).apply {
                 text = getString(R.string.btn_add_icon_shortcut)
                 setOnClickListener {
-                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "image/*"
-                    }
-                    startActivityForResult(intent, 320)
+                    startActivityForResult(imagePickerIntent(multiple = false), 320)
                 }
             })
         })
@@ -883,12 +930,7 @@ class MainActivity : Activity() {
     private fun pickImages(category: String, index: Int) {
         pendingCategory = category
         pendingIndex = index
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "image/*"
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-        }
-        startActivityForResult(intent, REQ_PICK)
+        startActivityForResult(imagePickerIntent(multiple = true), REQ_PICK)
     }
 
     // ---------- ホーム画面アイコン(ショートカット) ----------
@@ -943,12 +985,12 @@ class MainActivity : Activity() {
         }
         if (uris.isEmpty()) return
 
-        uris.forEach {
-            try {
-                contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) { /* 一部プロバイダでは付与できない場合がある */ }
+        // Googleフォトなどから選んだ画像は、あとで読めなくなることがあるのでアプリ内にコピーして使う
+        val added = uris.mapNotNull { importImage(it) }
+        if (added.size < uris.size) {
+            Toast.makeText(this, getString(R.string.toast_import_failed), Toast.LENGTH_SHORT).show()
         }
-        val added = uris.map { it.toString() }
+        if (added.isEmpty()) return
 
         when (pendingCategory) {
             CAT_STEP -> {
