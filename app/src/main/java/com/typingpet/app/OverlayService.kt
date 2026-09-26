@@ -1,6 +1,11 @@
 package com.typingpet.app
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
+import android.content.pm.ServiceInfo
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
@@ -204,6 +209,51 @@ class OverlayService : Service() {
         pets.values.forEach { p -> try { windowManager.removeView(p.view) } catch (e: Exception) {} }
         pets.clear()
         bitmapCache.clear()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        goForeground()
+        return START_STICKY // 止められても自動で戻ってくる
+    }
+
+    /**
+     * 「前面で動いているサービス」にする。
+     * 裏にいるアプリはスマホの省電力機能で一時停止されることがあり、
+     * そうなるとキャラが触っても動かなくなる(アプリを開くと一気に動く)ので、それを防ぐ。
+     * 通知の許可をしていなければ通知は表示されない。前面にできなかった場合もそのまま普通に動く。
+     */
+    private fun goForeground() {
+        try {
+            val channelId = "pet"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val nm = getSystemService(NotificationManager::class.java)
+                nm.createNotificationChannel(
+                    NotificationChannel(channelId, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_MIN)
+                )
+            }
+            val open = PendingIntent.getActivity(
+                this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+            )
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(this, channelId)
+            } else {
+                @Suppress("DEPRECATION") Notification.Builder(this)
+            }
+            val notification = builder
+                .setSmallIcon(R.drawable.ic_notif_paw)
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText(getString(R.string.notif_text))
+                .setContentIntent(open)
+                .setOngoing(true)
+                .build()
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(1, notification)
+            }
+        } catch (e: Exception) {
+            // 前面にできない状況でも、ペットはそのまま表示する
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
