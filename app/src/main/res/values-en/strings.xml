@@ -84,4 +84,8 @@
     <string name="label_show_chars">Characters on screen</string>
     <string name="desc_show_chars">Tap to show or hide. Each character on screen can be dragged around separately.</string>
     <string name="show_count">%1$d shown</string>
+    <string name="key_delete">⌫ when deleting</string>
+    <string name="btn_add_delete_trigger">+ Add reaction for ⌫ deleting</string>
+    <string name="notif_channel">Pet display</string>
+    <string name="notif_text">Pet is on screen</string>
 </resources>
