@@ -90,4 +90,6 @@
     <string name="notif_text">ペットを表示中</string>
     <string name="pick_image_title">画像を選ぶアプリ</string>
     <string name="toast_import_failed">読み込めなかった画像があります</string>
+    <string name="perm_ok">✓ OK</string>
+    <string name="perm_set">設定する ›</string>
 </resources>
