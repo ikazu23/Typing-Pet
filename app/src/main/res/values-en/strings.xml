@@ -68,10 +68,10 @@
     <string name="btn_cancel">Cancel</string>
     <string name="toast_keys_empty">Enter at least one character</string>
     <string name="label_chars">Characters</string>
-    <string name="desc_chars">Save your images (idle, typing, character triggers) and built-in color per character and switch between them. Edits in the Images tab apply to the character marked \"in use\".</string>
+    <string name="desc_chars">Save your images (idle, typing, character triggers) and built-in color per character. Edits in the Images tab apply to the character marked \"editing\".</string>
     <string name="char_default_name">Character %1$d</string>
-    <string name="label_in_use">(in use)</string>
-    <string name="btn_use">Use</string>
+    <string name="label_in_use">(editing)</string>
+    <string name="btn_use">Edit</string>
     <string name="btn_rename">Rename</string>
     <string name="btn_add_char">+ New character (empty)</string>
     <string name="btn_dup_char">+ Duplicate current character</string>
@@ -81,4 +81,7 @@
     <string name="toast_last_char">You can\'t delete the last character</string>
     <string name="switch_shadow_title">Show shadow</string>
     <string name="switch_shadow_desc">The faint shadow under the pet. Turn it off if it looks odd with your transparent images.</string>
+    <string name="label_show_chars">Characters on screen</string>
+    <string name="desc_show_chars">Tap to show or hide. Each character on screen can be dragged around separately.</string>
+    <string name="show_count">%1$d shown</string>
 </resources>
