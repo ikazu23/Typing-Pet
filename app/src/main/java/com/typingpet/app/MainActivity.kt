@@ -743,7 +743,7 @@ class MainActivity : Activity() {
             })
 
             val buttons = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
-            buttons.addView(Button(this@MainActivity).apply {
+            if (Prefs.DELETE_KEY !in t.keys) buttons.addView(Button(this@MainActivity).apply {
                 text = getString(R.string.btn_edit_keys)
                 setOnClickListener {
                     showKeysDialog(t.keys) { keys ->
@@ -793,10 +793,27 @@ class MainActivity : Activity() {
                 }
             }
         })
+
+        // 「⌫ 消したとき」は1つだけ作れる
+        if (triggers.none { Prefs.DELETE_KEY in it.keys }) {
+            addView(spacer(8))
+            addView(Button(this@MainActivity).apply {
+                text = getString(R.string.btn_add_delete_trigger)
+                setOnClickListener {
+                    val all = Prefs.getTriggers(this@MainActivity)
+                    all.add(Prefs.Trigger(mutableListOf(Prefs.DELETE_KEY), mutableListOf()))
+                    Prefs.setTriggers(this@MainActivity, all)
+                    renderImages()
+                    pickImages(CAT_TRIGGER, all.size - 1) // そのまま画像選択へ
+                }
+            })
+        }
     }
 
     private fun formatKeys(keys: List<String>): String =
-        keys.joinToString(" ") { getString(R.string.key_format, it) }
+        keys.joinToString(" ") {
+            if (it == Prefs.DELETE_KEY) getString(R.string.key_delete) else getString(R.string.key_format, it)
+        }
 
     /** 反応する文字を入力するダイアログ(スペース区切りで複数) */
     private fun showKeysDialog(current: List<String>, onOk: (MutableList<String>) -> Unit) {

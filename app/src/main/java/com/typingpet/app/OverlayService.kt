@@ -22,7 +22,9 @@ class OverlayService : Service() {
         val id: String,
         val view: PetView,
         val params: WindowManager.LayoutParams,
-        var keys: List<List<String>> = emptyList()
+        var keys: List<List<String>> = emptyList(),
+        /** 「⌫ 消したとき」の項目の番号(なければ -1) */
+        var deleteIdx: Int = -1
     )
 
     /** キャラid → 表示中のペット */
@@ -32,12 +34,21 @@ class OverlayService : Service() {
     private val bitmapCache = HashMap<String, Bitmap>()
 
     @Volatile private var maxKeyLen = 0
+    @Volatile private var watchDel = false
 
     companion object {
         @Volatile var instance: OverlayService? = null
 
         /** 表示中キャラに登録された文字のうち最長の長さ(0なら文字の反応なし) */
         val maxKeyLength: Int get() = instance?.maxKeyLen ?: 0
+
+        /** 表示中キャラの誰かが「⌫ 消したとき」を登録しているか */
+        val watchDelete: Boolean get() = instance?.watchDel ?: false
+
+        /** 文字が消されただけのときに呼ぶ */
+        fun reactDelete() {
+            instance?.let { s -> s.handler.post { s.pets.values.forEach { p -> p.view.react(p.deleteIdx) } } }
+        }
 
         fun reactIfRunning() {
             instance?.reactAll(null, 0)
@@ -126,10 +137,13 @@ class OverlayService : Service() {
                 triggers = c.triggers.map { t -> t.images.mapNotNull { get(it) } }
             )
             // 画像が1枚もない項目は照合しない
-            pet.keys = c.triggers.map { if (it.images.isEmpty()) emptyList() else it.keys.toList() }
+            val keysAll = c.triggers.map { if (it.images.isEmpty()) emptyList() else it.keys.toList() }
+            pet.deleteIdx = keysAll.indexOfFirst { Prefs.DELETE_KEY in it }
+            pet.keys = keysAll.map { l -> l.filter { it != Prefs.DELETE_KEY } }
         }
 
         maxKeyLen = pets.values.flatMap { it.keys.flatten() }.maxOfOrNull { it.length } ?: 0
+        watchDel = pets.values.any { it.deleteIdx >= 0 }
     }
 
     private fun createPet(id: String): Pet? {

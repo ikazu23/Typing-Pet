@@ -67,6 +67,9 @@ object Prefs {
 
     const val CAT_IDLE = "idle"
 
+    /** 文字で切り替えの「⌫ 消したとき」を表す特別なキー(文字の照合には使わない) */
+    const val DELETE_KEY = "⌫"
+
     /** 文字で切り替えの1件分 */
     class Trigger(var keys: MutableList<String>, val images: MutableList<String>)
 
