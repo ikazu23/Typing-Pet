@@ -5,69 +5,68 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
 
+/** 表示中のキャラを1体ずつ別ウィンドウで画面に浮かせる(それぞれドラッグで移動できる) */
 class OverlayService : Service() {
 
     private lateinit var windowManager: WindowManager
-    private lateinit var petView: PetView
-    private lateinit var params: WindowManager.LayoutParams
-    private var added = false
+    private val handler = Handler(Looper.getMainLooper())
+
+    private class Pet(
+        val id: String,
+        val view: PetView,
+        val params: WindowManager.LayoutParams,
+        var keys: List<List<String>> = emptyList()
+    )
+
+    /** キャラid → 表示中のペット */
+    private val pets = LinkedHashMap<String, Pet>()
 
     /** 読み込み済み画像のキャッシュ(設定変更のたびに全部読み直さないように) */
     private val bitmapCache = HashMap<String, Bitmap>()
 
+    @Volatile private var maxKeyLen = 0
+
     companion object {
-        var instance: OverlayService? = null
+        @Volatile var instance: OverlayService? = null
+
+        /** 表示中キャラに登録された文字のうち最長の長さ(0なら文字の反応なし) */
+        val maxKeyLength: Int get() = instance?.maxKeyLen ?: 0
 
         fun reactIfRunning() {
-            instance?.petView?.post { instance?.petView?.react() }
+            instance?.reactAll(null, 0)
         }
 
-        /** 登録した文字が入力された時に呼ぶ(index は Prefs.getTriggers の番号) */
-        fun reactTrigger(index: Int) {
-            instance?.petView?.post { instance?.petView?.react(index) }
+        /** 入力直後の数文字を渡して、各キャラが自分の登録文字で反応する */
+        fun reactText(window: String, newFrom: Int) {
+            instance?.reactAll(window, newFrom)
         }
 
         /** 設定画面での変更を、動作中のオーバーレイに即反映する */
         fun refreshIfRunning() {
-            instance?.applyPrefs()
+            instance?.let { s -> s.handler.post { s.sync() } }
         }
     }
 
     override fun onCreate() {
         super.onCreate()
         instance = this
-
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        petView = PetView(this)
-        petView.preset = Prefs.getPreset(this)
-        petView.shakeLevel = Prefs.getShakeLevel(this)
-        petView.showShadow = Prefs.getShowShadow(this)
-        loadImages()
+        sync()
+    }
 
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
-
-        val sizePx = dpToPx(Prefs.getSizeDp(this))
-
-        params = WindowManager.LayoutParams(sizePx, sizePx, type, baseFlags(), PixelFormat.TRANSLUCENT)
-        params.gravity = Gravity.TOP or Gravity.START
-        params.x = Prefs.getPosX(this)
-        params.y = Prefs.getPosY(this)
-
-        setupTouch()
-
-        try {
-            windowManager.addView(petView, params)
-            added = true
-        } catch (e: Exception) {
-            // オーバーレイ権限が未許可の場合はここに来る
+    private fun reactAll(window: String?, newFrom: Int) {
+        handler.post {
+            pets.values.forEach { p ->
+                val idx = if (window == null) -1 else TriggerMatcher.find(window, newFrom, p.keys)
+                p.view.react(idx)
+            }
         }
     }
 
@@ -83,68 +82,101 @@ class OverlayService : Service() {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
-    private fun loadImages() {
-        val req = dpToPx(260) // 最大サイズ(特大)に合わせて縮小読み込み
+    /** 表示中キャラの設定に合わせて、ペットを追加・更新・削除する */
+    private fun sync() {
+        val chars = Prefs.getCharacters(this)
+        val shown = Prefs.getShownIds(this)
+        val targets = chars.filter { it.id in shown }
+        val targetIds = targets.map { it.id }.toSet()
 
-        val idleUris = Prefs.getImages(this, Prefs.CAT_IDLE)
-        val stepUris = Prefs.getTypingSteps(this)
-        val triggers = Prefs.getTriggers(this)
+        // 非表示になったキャラを消す
+        pets.keys.filter { it !in targetIds }.forEach { id ->
+            pets.remove(id)?.let { p -> try { windowManager.removeView(p.view) } catch (e: Exception) {} }
+        }
 
         // 使われなくなった画像はキャッシュから外す
-        val inUse = HashSet<String>().apply {
-            addAll(idleUris); stepUris.forEach { addAll(it) }; triggers.forEach { addAll(it.images) }
+        val inUse = HashSet<String>()
+        targets.forEach { c ->
+            inUse.addAll(c.idle); c.steps.forEach { inUse.addAll(it) }; c.triggers.forEach { inUse.addAll(it.images) }
         }
         bitmapCache.keys.retainAll(inUse)
 
+        val req = dpToPx(260) // 最大サイズ(特大)に合わせて縮小読み込み
         fun get(uri: String): Bitmap? =
             bitmapCache[uri] ?: ImageLoader.load(this, uri, req)?.also { bitmapCache[uri] = it }
 
-        petView.setImages(
-            idle = idleUris.mapNotNull { get(it) },
-            steps = stepUris.map { s -> s.mapNotNull { get(it) } },
-            triggers = triggers.map { t -> t.images.mapNotNull { get(it) } }
-        )
-    }
-
-    fun applyPrefs() {
-        if (!added) return
         val sizePx = dpToPx(Prefs.getSizeDp(this))
-        params.width = sizePx
-        params.height = sizePx
-        params.flags = baseFlags()
-        params.x = Prefs.getPosX(this)
-        params.y = Prefs.getPosY(this)
-        windowManager.updateViewLayout(petView, params)
+        val flags = baseFlags()
 
-        petView.preset = Prefs.getPreset(this)
-        petView.shakeLevel = Prefs.getShakeLevel(this)
-        petView.showShadow = Prefs.getShowShadow(this)
-        loadImages()
+        targets.forEach { c ->
+            val pet = pets[c.id] ?: createPet(c.id) ?: return@forEach
+            pet.params.width = sizePx
+            pet.params.height = sizePx
+            pet.params.flags = flags
+            pet.params.x = c.x
+            pet.params.y = c.y
+            try { windowManager.updateViewLayout(pet.view, pet.params) } catch (e: Exception) {}
+
+            pet.view.preset = c.preset
+            pet.view.shakeLevel = Prefs.getShakeLevel(this)
+            pet.view.showShadow = Prefs.getShowShadow(this)
+            pet.view.setImages(
+                idle = c.idle.mapNotNull { get(it) },
+                steps = c.steps.map { s -> s.mapNotNull { get(it) } },
+                triggers = c.triggers.map { t -> t.images.mapNotNull { get(it) } }
+            )
+            // 画像が1枚もない項目は照合しない
+            pet.keys = c.triggers.map { if (it.images.isEmpty()) emptyList() else it.keys.toList() }
+        }
+
+        maxKeyLen = pets.values.flatMap { it.keys.flatten() }.maxOfOrNull { it.length } ?: 0
     }
 
-    private fun setupTouch() {
+    private fun createPet(id: String): Pet? {
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        else
+            @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+
+        val sizePx = dpToPx(Prefs.getSizeDp(this))
+        val params = WindowManager.LayoutParams(sizePx, sizePx, type, baseFlags(), PixelFormat.TRANSLUCENT)
+        params.gravity = Gravity.TOP or Gravity.START
+
+        val pet = Pet(id, PetView(this), params)
+        setupTouch(pet)
+        return try {
+            windowManager.addView(pet.view, params)
+            pets[id] = pet
+            pet
+        } catch (e: Exception) {
+            null // オーバーレイ権限が未許可の場合はここに来る
+        }
+    }
+
+    /** キャラごとにドラッグで移動。離した位置をそのキャラに保存する */
+    private fun setupTouch(pet: Pet) {
         var startX = 0
         var startY = 0
         var touchX = 0f
         var touchY = 0f
 
-        petView.setOnTouchListener { _, event ->
+        pet.view.setOnTouchListener { _, event ->
             if (Prefs.getPositionLocked(this)) return@setOnTouchListener false
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    startX = params.x; startY = params.y
+                    startX = pet.params.x; startY = pet.params.y
                     touchX = event.rawX; touchY = event.rawY
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    params.x = startX + (event.rawX - touchX).toInt()
-                    params.y = startY + (event.rawY - touchY).toInt()
-                    windowManager.updateViewLayout(petView, params)
+                    pet.params.x = startX + (event.rawX - touchX).toInt()
+                    pet.params.y = startY + (event.rawY - touchY).toInt()
+                    try { windowManager.updateViewLayout(pet.view, pet.params) } catch (e: Exception) {}
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    Prefs.setPos(this, params.x, params.y)
-                    petView.react()
+                    Prefs.setCharPos(this, pet.id, pet.params.x, pet.params.y)
+                    pet.view.react()
                     true
                 }
                 else -> false
@@ -155,7 +187,8 @@ class OverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         instance = null
-        if (added) windowManager.removeView(petView)
+        pets.values.forEach { p -> try { windowManager.removeView(p.view) } catch (e: Exception) {} }
+        pets.clear()
         bitmapCache.clear()
     }
 

@@ -17,53 +17,22 @@ class PetAccessibilityService : AccessibilityService() {
         if (event?.eventType != AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) return
         if (OverlayService.instance == null) return
 
-        // 文字の反応が1つも登録されていない / パスワード欄 → 中身は一切見ない
-        val keys = Prefs.getMatchKeys(this)
-        if (event.isPassword || keys.all { it.isEmpty() }) {
+        // 表示中のキャラに文字の反応が1つもない / パスワード欄 → 中身は一切見ない
+        val maxLen = OverlayService.maxKeyLength
+        if (event.isPassword || maxLen <= 0) {
             OverlayService.reactIfRunning()
             return
         }
 
-        val index = findTrigger(event, keys)
-        if (index >= 0) OverlayService.reactTrigger(index) else OverlayService.reactIfRunning()
-    }
-
-    /**
-     * 今回入力された位置の直前数文字(登録文字の最大長ぶん)だけを見て、
-     * 登録した文字が入力されたかをその場で照合する(保存・送信はしない)。
-     * 複数ヒットしたら、いちばん後ろ(＝最後に打たれた)ものを優先。
-     */
-    private fun findTrigger(event: AccessibilityEvent, keys: List<List<String>>): Int {
-        val after = event.text?.firstOrNull()?.toString() ?: return -1
-        val range = insertedRange(event, after) ?: return -1
-        val start = range.first
-        val end = range.second
-
-        val maxLen = keys.flatten().maxOfOrNull { it.length } ?: return -1
-        val winStart = maxOf(0, start - (maxLen - 1))
-        val window = after.substring(winStart, end)
-        val newFrom = start - winStart
-
-        var bestIndex = -1
-        var bestEnd = -1
-        var bestLen = 0
-        keys.forEachIndexed { ti, list ->
-            list.forEach { key ->
-                if (key.isEmpty()) return@forEach
-                var from = 0
-                while (true) {
-                    val pos = window.indexOf(key, from)
-                    if (pos < 0) break
-                    val e = pos + key.length
-                    // 今回入力された部分にかかっているものだけ有効
-                    if (e > newFrom && (e > bestEnd || (e == bestEnd && key.length > bestLen))) {
-                        bestIndex = ti; bestEnd = e; bestLen = key.length
-                    }
-                    from = pos + 1
-                }
-            }
+        // 入力位置の直前数文字(登録文字の最大長ぶん)だけを切り出して各キャラに渡す(保存・送信はしない)
+        val after = event.text?.firstOrNull()?.toString()
+        val range = after?.let { insertedRange(event, it) }
+        if (after == null || range == null) {
+            OverlayService.reactIfRunning()
+            return
         }
-        return bestIndex
+        val winStart = maxOf(0, range.first - (maxLen - 1))
+        OverlayService.reactText(after.substring(winStart, range.second), range.first - winStart)
     }
 
     /**

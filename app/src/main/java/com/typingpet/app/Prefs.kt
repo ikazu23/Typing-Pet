@@ -41,7 +41,14 @@ object Prefs {
     fun getPosX(context: Context): Int = sp(context).getInt("posX", 40)
     fun getPosY(context: Context): Int = sp(context).getInt("posY", 200)
     fun setPos(context: Context, x: Int, y: Int) = sp(context).edit().putInt("posX", x).putInt("posY", y).apply()
-    fun resetPos(context: Context) = setPos(context, 40, 200)
+    /** 全キャラの表示位置を初期位置に戻す */
+    fun resetPos(context: Context) {
+        setPos(context, 40, 200)
+        ensureCharacters(context)
+        val arr = readChars(context)
+        for (i in 0 until arr.length()) arr.optJSONObject(i)?.put("x", defaultX(i))?.put("y", defaultY(i))
+        writeChars(context, arr)
+    }
 
     // 内蔵プリセット(0〜3の色違い)
     fun getPreset(context: Context): Int = sp(context).getInt("preset", 0)
@@ -224,11 +231,25 @@ object Prefs {
     }
 
     // ---------- キャラ(イラスト一式＋内蔵カラーを名前付きで保存) ----------
-    // 使用中キャラの内容は上の「待機/タイピング中/文字で切り替え/内蔵カラー」にそのまま入っていて、
-    // キャラを切り替える時にだけ保存・読み込みする。
+    // 「編集中」キャラの内容は上の「待機/タイピング中/文字で切り替え/内蔵カラー」にそのまま入っていて、
+    // 編集するキャラを切り替える時にだけ保存・読み込みする。
+    // 画面に表示するキャラは複数選べる(表示中キャラのidリスト)。位置はキャラごとに保存する。
 
     private const val KEY_CHARS = "characters"
     private const val KEY_ACTIVE = "activeChar"
+    private const val KEY_SHOWN = "shownChars"
+
+    /** 画面に出すためのキャラ1体分のデータ */
+    class CharData(
+        val id: String,
+        val name: String,
+        val idle: List<String>,
+        val steps: List<List<String>>,
+        val triggers: List<Trigger>,
+        val preset: Int,
+        val x: Int,
+        val y: Int
+    )
 
     private fun readChars(context: Context): JSONArray = try {
         JSONArray(sp(context).getString(KEY_CHARS, "[]") ?: "[]")
@@ -238,15 +259,20 @@ object Prefs {
         sp(context).edit().putString(KEY_CHARS, arr.toString()).apply()
     }
 
-    /** 今の設定をキャラ1体分のデータにする */
-    private fun snapshot(context: Context, name: String): JSONObject = JSONObject()
-        .put("n", name)
+    private fun newId(): String = java.util.UUID.randomUUID().toString()
+
+    /** キャラごとの初期位置(少しずつずらす) */
+    private fun defaultX(i: Int) = 40 + (i % 5) * 90
+    private fun defaultY(i: Int) = 200 + (i % 5) * 90
+
+    /** 編集中キャラの内容(イラスト・カラー)を、既存のキャラデータに書き込む */
+    private fun fillFromCurrent(context: Context, o: JSONObject): JSONObject = o
         .put("idle", JSONArray(getImages(context, CAT_IDLE)))
         .put("steps", JSONArray(nestedToJson(getTypingSteps(context))))
         .put("tr", JSONArray(triggersToJson(getTriggers(context))))
         .put("preset", getPreset(context))
 
-    /** キャラ1体分のデータを今の設定に読み込む */
+    /** キャラ1体分のデータを編集中の設定に読み込む */
     private fun applySnapshot(context: Context, o: JSONObject) {
         ensureMigrated(context)
         sp(context).edit()
@@ -258,12 +284,31 @@ object Prefs {
         matchKeysCache = null
     }
 
-    /** キャラが1体もなければ、今の設定を1体目として登録する */
-    fun ensureCharacters(context: Context, defaultName: String) {
-        if (readChars(context).length() > 0) return
-        val arr = JSONArray().put(snapshot(context, defaultName))
-        writeChars(context, arr)
-        sp(context).edit().putInt(KEY_ACTIVE, 0).apply()
+    /**
+     * キャラが1体もなければ今の設定を1体目として登録する。
+     * あわせて、古いデータにid・位置がなければ付ける(以前の表示位置は編集中キャラに引き継ぐ)。
+     */
+    fun ensureCharacters(context: Context, defaultName: String = context.getString(R.string.char_default_name, 1)) {
+        val arr = readChars(context)
+        if (arr.length() == 0) {
+            arr.put(fillFromCurrent(context, JSONObject().put("n", defaultName)))
+            sp(context).edit().putInt(KEY_ACTIVE, 0).apply()
+        }
+        val active = getActiveCharacter(context)
+        var changed = false
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            if (!o.has("id")) { o.put("id", newId()); changed = true }
+            if (!o.has("x") || !o.has("y")) {
+                if (i == active) {
+                    o.put("x", sp(context).getInt("posX", defaultX(i))).put("y", sp(context).getInt("posY", defaultY(i)))
+                } else {
+                    o.put("x", defaultX(i)).put("y", defaultY(i))
+                }
+                changed = true
+            }
+        }
+        if (changed) writeChars(context, arr)
     }
 
     fun getCharacterNames(context: Context): List<String> {
@@ -273,19 +318,82 @@ object Prefs {
 
     fun getActiveCharacter(context: Context): Int = sp(context).getInt(KEY_ACTIVE, 0)
 
-    /** 使用中キャラに今の設定を書き戻す */
+    /** 全キャラのデータ。編集中キャラは最新の編集内容を返す */
+    fun getCharacters(context: Context): List<CharData> {
+        ensureCharacters(context)
+        val arr = readChars(context)
+        val active = getActiveCharacter(context)
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            if (i == active) {
+                CharData(
+                    o.optString("id"), o.optString("n"),
+                    getImages(context, CAT_IDLE), getTypingSteps(context), getTriggers(context), getPreset(context),
+                    o.optInt("x", defaultX(i)), o.optInt("y", defaultY(i))
+                )
+            } else {
+                val steps = mutableListOf<List<String>>()
+                val sa = o.optJSONArray("steps") ?: JSONArray()
+                for (k in 0 until sa.length()) steps.add(parseList(sa.optJSONArray(k)))
+                val trs = mutableListOf<Trigger>()
+                val ta = o.optJSONArray("tr") ?: JSONArray()
+                for (k in 0 until ta.length()) {
+                    val t = ta.optJSONObject(k) ?: continue
+                    trs.add(Trigger(parseList(t.optJSONArray("k")), parseList(t.optJSONArray("i"))))
+                }
+                CharData(
+                    o.optString("id"), o.optString("n"),
+                    parseList(o.optJSONArray("idle")), steps, trs, o.optInt("preset", 0),
+                    o.optInt("x", defaultX(i)), o.optInt("y", defaultY(i))
+                )
+            }
+        }
+    }
+
+    /** 表示中キャラのid。未設定なら編集中キャラだけを表示 */
+    fun getShownIds(context: Context): Set<String> {
+        ensureCharacters(context)
+        val raw = sp(context).getString(KEY_SHOWN, null)
+        if (raw == null) {
+            val id = readChars(context).optJSONObject(getActiveCharacter(context))?.optString("id") ?: return emptySet()
+            return setOf(id)
+        }
+        return try { parseList(JSONArray(raw)).toSet() } catch (e: Exception) { emptySet() }
+    }
+
+    fun setShown(context: Context, id: String, shown: Boolean) {
+        val set = getShownIds(context).toMutableSet()
+        if (shown) set.add(id) else set.remove(id)
+        // キャラの並び順で保存
+        val order = getCharacters(context).map { it.id }
+        sp(context).edit().putString(KEY_SHOWN, JSONArray(order.filter { it in set }).toString()).apply()
+    }
+
+    /** キャラの表示位置を保存 */
+    fun setCharPos(context: Context, id: String, x: Int, y: Int) {
+        val arr = readChars(context)
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            if (o.optString("id") == id) {
+                o.put("x", x).put("y", y)
+                writeChars(context, arr)
+                return
+            }
+        }
+    }
+
+    /** 編集中キャラに今の設定を書き戻す(位置やidはそのまま残す) */
     private fun saveActive(context: Context) {
         val arr = readChars(context)
         val a = getActiveCharacter(context)
-        if (a in 0 until arr.length()) {
-            val name = arr.optJSONObject(a)?.optString("n", "") ?: ""
-            arr.put(a, snapshot(context, name))
-            writeChars(context, arr)
-        }
+        val o = arr.optJSONObject(a) ?: return
+        fillFromCurrent(context, o)
+        writeChars(context, arr)
     }
 
     fun switchCharacter(context: Context, index: Int) {
         if (index == getActiveCharacter(context)) return
+        ensureCharacters(context)
         saveActive(context)
         val arr = readChars(context)
         val o = arr.optJSONObject(index) ?: return
@@ -293,24 +401,25 @@ object Prefs {
         sp(context).edit().putInt(KEY_ACTIVE, index).apply()
     }
 
-    /** キャラを追加して切り替える。copyCurrent=trueなら今のキャラを複製、falseなら空のキャラ */
+    /** キャラを追加して編集中にする。copyCurrent=trueなら今のキャラを複製、falseなら空のキャラ */
     fun addCharacter(context: Context, name: String, copyCurrent: Boolean) {
+        ensureCharacters(context)
         saveActive(context)
         val arr = readChars(context)
+        val i = arr.length()
+        val base = JSONObject().put("n", name).put("id", newId()).put("x", defaultX(i)).put("y", defaultY(i))
         val o = if (copyCurrent) {
-            snapshot(context, name)
+            fillFromCurrent(context, base)
         } else {
-            JSONObject()
-                .put("n", name)
-                .put("idle", JSONArray())
+            base.put("idle", JSONArray())
                 .put("steps", JSONArray())
                 .put("tr", JSONArray(triggersToJson(defaultTriggers())))
-                .put("preset", arr.length() % 4)
+                .put("preset", i % 4)
         }
         arr.put(o)
         writeChars(context, arr)
         applySnapshot(context, o)
-        sp(context).edit().putInt(KEY_ACTIVE, arr.length() - 1).apply()
+        sp(context).edit().putInt(KEY_ACTIVE, i).apply()
     }
 
     fun renameCharacter(context: Context, index: Int, name: String) {
@@ -321,8 +430,11 @@ object Prefs {
 
     /** キャラを削除する。最後の1体は削除できない(falseを返す) */
     fun deleteCharacter(context: Context, index: Int): Boolean {
+        ensureCharacters(context)
+        val shown = getShownIds(context)
         val arr = readChars(context)
         if (arr.length() <= 1 || index !in 0 until arr.length()) return false
+        val removedId = arr.optJSONObject(index)?.optString("id")
         val active = getActiveCharacter(context)
         arr.remove(index)
         writeChars(context, arr)
@@ -336,7 +448,10 @@ object Prefs {
             index < active -> active - 1
             else -> active
         }
-        sp(context).edit().putInt(KEY_ACTIVE, newActive).apply()
+        sp(context).edit()
+            .putInt(KEY_ACTIVE, newActive)
+            .putString(KEY_SHOWN, JSONArray(shown.filter { it != removedId }).toString())
+            .apply()
         return true
     }
 }

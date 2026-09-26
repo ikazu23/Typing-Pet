@@ -7,14 +7,18 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -34,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var basicBox: LinearLayout
     private lateinit var presetBox: LinearLayout
     private lateinit var imageBox: LinearLayout
+    private lateinit var showBox: LinearLayout
 
     private val ink = Color.parseColor("#3A2E2C")
     private val sub = Color.parseColor("#8A7A72")
@@ -85,6 +90,10 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(16))
         })
 
+        showBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(showBox)
+        root.addView(spacer(16))
+
         root.addView(sectionCard {
             addView(smallLabel(getString(R.string.section_permission)))
             addView(spacer(8))
@@ -134,9 +143,138 @@ class MainActivity : Activity() {
         renderAll()
     }
 
+    // ---------- 表示するキャラ(アイコンをタップで表示/非表示) ----------
+
+    private fun renderShowBar() {
+        showBox.removeAllViews()
+        val chars = Prefs.getCharacters(this)
+        val shown = Prefs.getShownIds(this)
+
+        showBox.addView(sectionCard {
+            val head = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            head.addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.label_show_chars)
+                textSize = 15f
+                setTextColor(ink)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            head.addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.show_count, chars.count { it.id in shown })
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                setPadding(dp(10), dp(3), dp(10), dp(3))
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(if (shown.isEmpty()) sub else accent)
+                }
+            })
+            addView(head)
+            addView(descLabel(getString(R.string.desc_show_chars)))
+            addView(spacer(12))
+
+            val row = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
+            chars.forEach { c -> row.addView(avatarChip(c, c.id in shown)) }
+            addView(HorizontalScrollView(this@MainActivity).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(row)
+            })
+        })
+    }
+
+    /** まるいアイコン＋名前のボタン。表示中はオレンジの輪とチェック、非表示は薄く */
+    private fun avatarChip(c: Prefs.CharData, isShown: Boolean): View {
+        val size = dp(64)
+        val cell = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(dp(80), LinearLayout.LayoutParams.WRAP_CONTENT)
+            isClickable = true
+        }
+
+        val frame = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(size + dp(8), size + dp(8))
+        }
+
+        // 輪っか
+        frame.addView(View(this).apply {
+            layoutParams = FrameLayout.LayoutParams(size + dp(8), size + dp(8))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.TRANSPARENT)
+                if (isShown) setStroke(dp(3), accent) else setStroke(dp(2), Color.parseColor("#E3D6C9"))
+            }
+        })
+
+        // 中身(登録画像の1枚目、なければ内蔵イラスト)
+        val uri = c.idle.firstOrNull() ?: c.steps.flatten().firstOrNull()
+        val face: View = if (uri != null) {
+            ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                thumbFor(uri)?.let { setImageBitmap(it) }
+            }
+        } else {
+            PetView(this).apply { preset = c.preset; showShadow = false }
+        }
+        face.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.parseColor("#F3EAE0"))
+        }
+        face.clipToOutline = true
+        face.layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
+        face.alpha = if (isShown) 1f else 0.4f
+        frame.addView(face)
+
+        // 表示中のチェック
+        if (isShown) {
+            frame.addView(TextView(this).apply {
+                text = "✓"
+                textSize = 11f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(accent)
+                    setStroke(dp(2), Color.WHITE)
+                }
+                layoutParams = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END)
+            })
+        }
+        cell.addView(frame)
+
+        cell.addView(TextView(this).apply {
+            text = c.name
+            textSize = 12f
+            setTextColor(if (isShown) ink else sub)
+            gravity = Gravity.CENTER
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            setPadding(dp(2), dp(4), dp(2), 0)
+            layoutParams = LinearLayout.LayoutParams(dp(76), LinearLayout.LayoutParams.WRAP_CONTENT)
+        })
+
+        cell.setOnClickListener {
+            Prefs.setShown(this, c.id, !isShown)
+            if (!isShown && OverlayService.instance == null && Settings.canDrawOverlays(this)) {
+                startService(Intent(this, OverlayService::class.java))
+            } else {
+                OverlayService.refreshIfRunning()
+            }
+            // ぽよっと押した感
+            frame.animate().scaleX(0.88f).scaleY(0.88f).setDuration(80).withEndAction {
+                renderShowBar()
+            }.start()
+        }
+        return cell
+    }
+
     // ---------- 全体描画 ----------
 
     private fun renderAll() {
+        renderShowBar()
         renderTabs()
         renderBasic()
         renderPreset()
@@ -361,6 +499,7 @@ class MainActivity : Activity() {
                     showTextDialog(getString(R.string.dialog_char_name_title), name, "") { newName ->
                         Prefs.renameCharacter(this@MainActivity, i, newName)
                         renderPreset()
+                        renderShowBar()
                     }
                 }
             })
@@ -460,6 +599,7 @@ class MainActivity : Activity() {
     private fun imagesChanged() {
         OverlayService.refreshIfRunning()
         renderImages()
+        renderShowBar()
     }
 
     private fun renderImages() {
