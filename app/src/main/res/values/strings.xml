@@ -68,10 +68,10 @@
     <string name="btn_cancel">キャンセル</string>
     <string name="toast_keys_empty">文字を1つ以上入力してください</string>
     <string name="label_chars">キャラ</string>
-    <string name="desc_chars">イラスト(待機・タイピング中・文字で切り替え)と内蔵カラーを、キャラごとに保存して切り替えられます。イラストタブでの編集は「使用中」のキャラに反映されます。</string>
+    <string name="desc_chars">イラスト(待機・タイピング中・文字で切り替え)と内蔵カラーを、キャラごとに保存できます。イラストタブでの編集は「編集中」のキャラに反映されます。</string>
     <string name="char_default_name">キャラ %1$d</string>
-    <string name="label_in_use">(使用中)</string>
-    <string name="btn_use">使う</string>
+    <string name="label_in_use">(編集中)</string>
+    <string name="btn_use">編集する</string>
     <string name="btn_rename">名前変更</string>
     <string name="btn_add_char">＋ 新しいキャラ(空っぽ)</string>
     <string name="btn_dup_char">＋ 使用中のキャラを複製</string>
@@ -81,4 +81,7 @@
     <string name="toast_last_char">最後の1体は削除できません</string>
     <string name="switch_shadow_title">足元の影を表示</string>
     <string name="switch_shadow_desc">ペットの足元に出る薄い影です。透過PNGのイラストで影が気になる場合はOFFにしてください。</string>
+    <string name="label_show_chars">表示するキャラ</string>
+    <string name="desc_show_chars">タップで表示／非表示を切り替え。表示中のキャラは、画面上でそれぞれドラッグして動かせます。</string>
+    <string name="show_count">%1$d体表示中</string>
 </resources>
